@@ -50,7 +50,7 @@ jobs:
 
       - name: trigger deployment
         env:
-           GH_TOKEN: ${{ github.PAT }}
+           GH_TOKEN: ${{ secrets.PAT }}
         run: |
           gh api repos/dpdeepankar/githubActionsReleaseRepo/dispatches \
             --method POST \
