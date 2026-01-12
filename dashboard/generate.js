@@ -9,23 +9,39 @@ async function fetchBuildData() {
   const builds = [];
   for (const app of config.appRepos) {
     try {
-      const { data: runs } = await octokit.actions.listWorkflowRuns({
-        owner: config.owner,
-        repo: app.repo,
-        workflow_id: app.buildWorkflow,
-        per_page: 5,
-      });
+      let page = 1;
+      let hasMore = true;
+      
+      // Paginate through all workflow runs
+      while (hasMore) {
+        const { data: runs } = await octokit.actions.listWorkflowRuns({
+          owner: config.owner,
+          repo: app.repo,
+          workflow_id: app.buildWorkflow,
+          per_page: 100, // Max allowed by GitHub API
+          page: page,
+        });
 
-      const latestRun = runs.workflow_runs[0] || {};
-      const buildLink = latestRun.html_url || `https://github.com/${config.owner}/${app.repo}/actions/workflows/${app.buildWorkflow}`;
+        // Add all runs from this page
+        for (const run of runs.workflow_runs) {
+          builds.push({
+            appName: app.name,
+            branch: run.head_branch || 'N/A',
+            status: run.status || 'N/A',
+            conclusion: run.conclusion || 'N/A',
+            createdAt: run.created_at,
+            link: run.html_url,
+          });
+        }
 
-      builds.push({
-        appName: app.name,
-        branch: latestRun.head_branch || 'N/A',
-        status: latestRun.status || 'N/A',
-        conclusion: latestRun.conclusion || 'N/A',
-        link: buildLink,
-      });
+        // Check if there are more pages
+        hasMore = runs.workflow_runs.length === 100;
+        page++;
+        
+        // Safety limit to prevent infinite loops (adjust as needed)
+        if (page > 10) break; // Max 1000 runs per workflow
+      }
+
     } catch (error) {
       console.error(`Error fetching build for ${app.repo} (${app.buildWorkflow}):`, error.message);
       builds.push({
@@ -33,38 +49,58 @@ async function fetchBuildData() {
         branch: 'Not Found',
         status: 'error',
         conclusion: 'error',
+        createdAt: new Date().toISOString(),
         link: `https://github.com/${config.owner}/${app.repo}/actions`,
       });
     }
   }
+  
+  // Sort by creation date (newest first)
+  builds.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return builds;
 }
 
 async function fetchReleaseData() {
   const releases = [];
   try {
-    const { data: runs } = await octokit.actions.listWorkflowRuns({
-      owner: config.owner,
-      repo: config.repoB,
-      workflow_id: config.releaseWorkflowName,
-      per_page: 50,
-    });
-    for (const run of runs.workflow_runs) {
-      const match = run.name.match(/^(.+?)\s*-\s*(.+?)\s*-\s*release$/i);
-      if (match) {
-        const [, branch, appName] = match;
-        releases.push({
-          appName: appName.trim(),
-          branch: branch.trim(),
-          status: run.status || 'N/A',
-          conclusion: run.conclusion || 'N/A',
-          link: run.html_url,
-        });
+    let page = 1;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data: runs } = await octokit.actions.listWorkflowRuns({
+        owner: config.owner,
+        repo: config.repoB,
+        workflow_id: config.releaseWorkflowName,
+        per_page: 100,
+        page: page,
+      });
+      
+      for (const run of runs.workflow_runs) {
+        const match = run.name.match(/^(.+?)\s*-\s*(.+?)\s*-\s*release$/i);
+        if (match) {
+          const [, branch, appName] = match;
+          releases.push({
+            appName: appName.trim(),
+            branch: branch.trim(),
+            status: run.status || 'N/A',
+            conclusion: run.conclusion || 'N/A',
+            createdAt: run.created_at,
+            link: run.html_url,
+          });
+        }
       }
+      
+      hasMore = runs.workflow_runs.length === 100;
+      page++;
+      
+      if (page > 10) break; // Max 1000 runs
     }
   } catch (error) {
     console.error(`Error fetching releases from ${config.repoB}:`, error.message);
   }
+  
+  // Sort by creation date (newest first)
+  releases.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return releases;
 }
 
@@ -82,9 +118,12 @@ function generateHTML(builds, releases) {
   const releaseApps = getUniqueValues(releases, 'appName');
   const releaseBranches = getUniqueValues(releases, 'branch');
 
-  // Initial table HTML
+  // Initial table HTML with pagination
   const buildTableHTML = builds.length > 0 ? `
-    <table>
+    <div class="pagination-info">
+      <span>Showing <span id="build-start">1</span>-<span id="build-end">20</span> of <span id="build-total">${builds.length}</span> builds</span>
+    </div>
+    <table id="build-table">
       <thead>
         <tr>
           <th>Application</th>
@@ -94,7 +133,7 @@ function generateHTML(builds, releases) {
         </tr>
       </thead>
       <tbody>
-        ${builds.map(b => `
+        ${builds.slice(0, 20).map(b => `
           <tr>
             <td style="font-weight: 500;">${b.appName}</td>
             <td>${b.branch}</td>
@@ -104,10 +143,14 @@ function generateHTML(builds, releases) {
         `).join('')}
       </tbody>
     </table>
+    <div class="pagination-controls" id="build-pagination"></div>
   ` : '<div class="no-data">No build information available.</div>';
 
   const releaseTableHTML = releases.length > 0 ? `
-    <table>
+    <div class="pagination-info">
+      <span>Showing <span id="release-start">1</span>-<span id="release-end">20</span> of <span id="release-total">${releases.length}</span> releases</span>
+    </div>
+    <table id="release-table">
       <thead>
         <tr>
           <th>Application</th>
@@ -117,7 +160,7 @@ function generateHTML(builds, releases) {
         </tr>
       </thead>
       <tbody>
-        ${releases.map(r => `
+        ${releases.slice(0, 20).map(r => `
           <tr>
             <td style="font-weight: 500;">${r.appName}</td>
             <td>${r.branch}</td>
@@ -127,6 +170,7 @@ function generateHTML(builds, releases) {
         `).join('')}
       </tbody>
     </table>
+    <div class="pagination-controls" id="release-pagination"></div>
   ` : '<div class="no-data">No release information available.</div>';
 
   return `
@@ -286,6 +330,52 @@ function generateHTML(builds, releases) {
             font-size: 1.5rem;
             font-weight: 600;
             margin: 1rem 1.5rem;
+        }
+
+        .pagination-info {
+            padding: 0.75rem 1.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pagination-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            padding: 0.5rem 0.75rem;
+            min-width: 40px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .page-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         table {
@@ -478,6 +568,11 @@ function generateHTML(builds, releases) {
     <script>
         const buildData = ${JSON.stringify(builds)};
         const releaseData = ${JSON.stringify(releases)};
+        
+        const pagination = {
+            build: { currentPage: 1, itemsPerPage: 20, filteredData: buildData },
+            release: { currentPage: 1, itemsPerPage: 20, filteredData: releaseData }
+        };
 
         function getStatusClass(status, conclusion) {
             if (status === 'completed') {
@@ -502,10 +597,78 @@ function generateHTML(builds, releases) {
             return status;
         }
 
+        function renderPagination(tab) {
+            const pag = pagination[tab];
+            const totalPages = Math.ceil(pag.filteredData.length / pag.itemsPerPage);
+            const container = document.getElementById(tab + '-pagination');
+            
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            
+            // Previous button
+            html += \`<button class="page-btn" onclick="changePage('\${tab}', \${pag.currentPage - 1})" \${pag.currentPage === 1 ? 'disabled' : ''}>← Prev</button>\`;
+            
+            // Page numbers
+            const maxButtons = 7;
+            let startPage = Math.max(1, pag.currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+            
+            if (startPage > 1) {
+                html += \`<button class="page-btn" onclick="changePage('\${tab}', 1)">1</button>\`;
+                if (startPage > 2) html += '<span style="padding: 0.5rem;">...</span>';
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += \`<button class="page-btn \${i === pag.currentPage ? 'active' : ''}" onclick="changePage('\${tab}', \${i})">\${i}</button>\`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span style="padding: 0.5rem;">...</span>';
+                html += \`<button class="page-btn" onclick="changePage('\${tab}', \${totalPages})">\${totalPages}</button>\`;
+            }
+            
+            // Next button
+            html += \`<button class="page-btn" onclick="changePage('\${tab}', \${pag.currentPage + 1})" \${pag.currentPage === totalPages ? 'disabled' : ''}>Next →</button>\`;
+            
+            container.innerHTML = html;
+        }
+
+        function changePage(tab, page) {
+            const pag = pagination[tab];
+            const totalPages = Math.ceil(pag.filteredData.length / pag.itemsPerPage);
+            
+            if (page < 1 || page > totalPages) return;
+            
+            pag.currentPage = page;
+            renderTable(pag.filteredData, tab);
+        }
+
         function renderTable(rows, tab) {
-            if (rows.length === 0) return '<div class="no-results">No matching results.</div>';
+            const pag = pagination[tab];
+            const container = document.getElementById(tab + '-table-container');
+            
+            if (rows.length === 0) {
+                container.innerHTML = '<div class="no-results">No matching results.</div>';
+                return;
+            }
+
+            const start = (pag.currentPage - 1) * pag.itemsPerPage;
+            const end = Math.min(start + pag.itemsPerPage, rows.length);
+            const pageRows = rows.slice(start, end);
+            
             const title = tab === 'build' ? 'Build' : 'Release';
-            return \`
+            const html = \`
+                <div class="pagination-info">
+                    <span>Showing <span id="\${tab}-start">\${start + 1}</span>-<span id="\${tab}-end">\${end}</span> of <span id="\${tab}-total">\${rows.length}</span> \${tab}s</span>
+                </div>
                 <table>
                     <thead>
                         <tr>
@@ -516,7 +679,7 @@ function generateHTML(builds, releases) {
                         </tr>
                     </thead>
                     <tbody>
-                        \${rows.map(item => \`
+                        \${pageRows.map(item => \`
                             <tr>
                                 <td style="font-weight: 500;">\${item.appName}</td>
                                 <td>\${item.branch}</td>
@@ -526,7 +689,11 @@ function generateHTML(builds, releases) {
                         \`).join('')}
                     </tbody>
                 </table>
+                <div class="pagination-controls" id="\${tab}-pagination"></div>
             \`;
+            
+            container.innerHTML = html;
+            renderPagination(tab);
         }
 
         function filterTable(tab) {
@@ -534,7 +701,6 @@ function generateHTML(builds, releases) {
             const branchVal = document.getElementById(tab + '-branch-select').value;
 
             const data = tab === 'build' ? buildData : releaseData;
-            const container = document.getElementById(tab + '-table-container');
 
             const filtered = data.filter(item => {
                 const appMatch = !appVal || item.appName === appVal;
@@ -542,7 +708,9 @@ function generateHTML(builds, releases) {
                 return appMatch && branchMatch;
             });
 
-            container.innerHTML = renderTable(filtered, tab);
+            pagination[tab].filteredData = filtered;
+            pagination[tab].currentPage = 1;
+            renderTable(filtered, tab);
         }
 
         function clearFilters(tab) {
@@ -592,8 +760,13 @@ function getStatusText(status, conclusion) {
 }
 
 async function main() {
+  console.log('Fetching workflow data...');
   const builds = await fetchBuildData();
+  console.log(`Fetched ${builds.length} build workflows`);
+  
   const releases = await fetchReleaseData();
+  console.log(`Fetched ${releases.length} release workflows`);
+  
   const html = generateHTML(builds, releases);
   fs.writeFileSync('index.html', html);
   console.log('Generated index.html successfully!');
