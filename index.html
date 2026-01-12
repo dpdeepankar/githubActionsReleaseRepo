@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CI/CD Control Center • 2026</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>CI/CD Control Center</h1>
+      <p>Quick access to builds & deployments • January 2026</p>
+    </header>
+
+    <div class="cards">
+      <div class="card" data-workflow="container-build.yml">
+        <div class="card-content">
+          <h2>Container Build</h2>
+          <p>Build & push Docker images</p>
+        </div>
+      </div>
+
+      <div class="card" data-workflow="container-release.yml">
+        <div class="card-content">
+          <h2>Container Release</h2>
+          <p>Create GitHub Release + multi-arch manifest</p>
+        </div>
+      </div>
+
+      <div class="card" data-workflow="terraform-plan.yml">
+        <div class="card-content">
+          <h2>Terraform Plan/Build</h2>
+          <p>Plan & validate infrastructure</p>
+        </div>
+      </div>
+
+      <div class="card" data-workflow="terraform-apply.yml">
+        <div class="card-content">
+          <h2>Terraform Deploy</h2>
+          <p>Apply infrastructure changes</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-container hidden" id="workflow-info">
+      <h2 id="workflow-title">Latest Runs</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Workflow</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody id="runs-body"></tbody>
+      </table>
+
+      <div class="actions">
+        <a id="trigger-link" class="btn primary" href="#" target="_blank">Run this workflow →</a>
+        <button class="btn secondary" onclick="hideTable()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
