@@ -49,20 +49,19 @@ jobs:
           retention-days: 1
 
       - name: trigger deployment
-        env:
-           GH_TOKEN: ${{ secrets.PAT }}
-        run: |
-          gh api repos/dpdeepankar/githubActionsReleaseRepo/dispatches \
-            --method POST \
-            -H "Accept: applicaiton/vnd.github+json" \
-            -f event_type=${{ inputs.appName }} \
-            -f client_payload='{
-              "repository": "${{github.repository}}",
+        uses: peter-evans/repository-dispatch@v4   # or @v4 if you prefer latest
+        with:
+          token:          ${{ secrets.PAT }}                 # ← from Repo A
+          repository:     dpdeepankar/githubActionsReleaseRepo  # target repo
+          event-type:     ${{ inputs.appName }}
+          client-payload: |
+            {
+              "repository": "${{ github.repository }}",
               "branch": "${{ github.ref_name }}",
               "runId": "${{ github.run_id }}",
-              "appName": ${{ inputs.appName }}",
-              "acrName": ${{ inputs.acrName }}",
+              "appName": "${{ inputs.appName }}",
+              "acrName": "${{ inputs.acrName }}",
               "acrResourceGroup": "${{ inputs.acrResourceGroup }}",
               "acaName": "${{ inputs.acaName }}",
               "acaResourceGroup": "${{ inputs.acaResourceGroup }}"
-              }'
+            }
