@@ -21,7 +21,7 @@ jobs:
           echo "### Release Approval Summary"
           echo ""
           echo "**App**: ${{ github.event.client_payload.appName }}"
-          echo "**Environment**: ${{ github.event.client_payload.branch == 'main' && 'prod' || startsWith(github.event.client_payload.branch, 'dlv') && 'dlv' || 'dev' }}"
+          echo "**Environment**: ${{ github.event.client_payload.branch == 'main' && 'prod' || github.event.client_payload.branch }}"
           echo "**Branch / Trigger**: ${{ github.event.client_payload.repository }}/${{ github.event.client_payload.branch }}"
           echo "**Image**: ${{ github.event.client_payload.appName }}:${{ github.event.client_payload.runId }}"
           echo "**Full Image**: ${{ github.event.client_payload.acrName }}.azurecr.io/${{ github.event.client_payload.appName }}:${{ github.event.client_payload.runId }}"
