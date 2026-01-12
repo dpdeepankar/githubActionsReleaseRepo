@@ -24,7 +24,9 @@ on:
       acaResourceGroup:
         type: string
         required: true
-        
+
+env:
+    GH_TOKEN: ${{ github.token }}
 jobs:
   build-image:
     runs-on: ubuntu-latest
