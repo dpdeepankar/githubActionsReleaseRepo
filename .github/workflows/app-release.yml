@@ -1,0 +1,45 @@
+name: container app release
+
+run-name: ${{ github.event.client_payload.branch }}-${{ github.event.client_payload.appName }}
+
+on:
+  repository_dispatch:
+    types: [ app1, app2, app3, app4 ]
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: startsWith(github.event.client_payload.branch, 'dev') && 'dev' || startsWith(github.event.client_payload.branch, 'dlv') && 'dlv' || github.event.client_payload.branch == 'main' && 'prod'
+    steps:
+      - name: download image from artifact
+        uses: dawidd6/dawidd6/action-download-artifact@12
+        with: 
+          repo: ${{ github.event.client_payload.repository }}
+          run_id: ${{ github.event.client_payload.runId }}
+          name: container-image
+
+      - name: load docker image
+        run: |
+          docker load -i image.tar
+
+      - name: Login Azure
+        run: |
+          echo login to azure
+
+      - name: Login ACR
+        run: |
+          echo login to ACR ${{ github.event.client_payload.acrName }}
+
+      - name: push to acr
+        run: |
+          echo "push docker image to acr"
+
+      - name: deploy to aca
+        run: |
+          echo "deploy the container image to ACR"
+          echo "image: ${{ github.event.client_payload.acrName }}.azurecr.io/${{ github.event.client_payload.appName }}:${{ github.event.client_payload.runId }}"
+          echo "container app Name: ${{ github.event.client_payload.acaName }}"
+          echo "container app RG: ${{ github.event.client_payload.acaResourceGroup }}"
+          
+      
