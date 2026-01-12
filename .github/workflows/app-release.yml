@@ -10,7 +10,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: startsWith(github.event.client_payload.branch, 'dev') && 'dev' || startsWith(github.event.client_payload.branch, 'dlv') && 'dlv' || github.event.client_payload.branch == 'main' && 'prod'
+    environment: ${{ (startsWith(github.event.client_payload.branch, 'dev') && 'dev') || (startsWith(github.event.client_payload.branch, 'dlv') && 'dlv') ||  (github.event.client_payload.branch == 'main' && 'prod' ) }}
     steps:
       - name: download image from artifact
         uses: dawidd6/action-download-artifact@v12
