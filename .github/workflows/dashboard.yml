@@ -1,0 +1,35 @@
+name: Generate Dashboard
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours; adjust as needed
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate HTML
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Or use a secret PAT: ${{ secrets.MY_PAT }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_B: your-repo-b-name  # Hardcode or use vars
+          RELEASE_WORKFLOW_NAME: release.yml
+        run: node generate.js
+
+      - name: Deploy to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: .  # Deploy the root (including index.html)
+          clean: true  # Clean old files
