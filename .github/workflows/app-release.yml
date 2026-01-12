@@ -23,12 +23,8 @@ jobs:
           echo "**Full Image**: ${{ github.event.client_payload.acrName }}.azurecr.io/${{ github.event.client_payload.appName }}:${{ github.event.client_payload.runId }}"
           echo ""
           echo "**Triggered by**: ${{ github.event.client_payload.repository }} run #${{ github.event.client_payload.runId }}"
-          echo "[View Build Workflow Run](https://github.com/${{ github.event.client_payload.repository }}/${{ github.event.client_payload.branch }}/actions/runs/${{ github.event.client_payload.runId }})"
-          echo ""
-          echo "#### Quick Links"
-          echo "- [Approve / Reject here](#review-deployments)"  # GitHub auto-links to the approval UI
-          echo "- [Container App](${{ github.event.client_payload.acaName }} in RG ${{ github.event.client_payload.acaResourceGroup }})"
-          echo ""
+          echo "[View Build Workflow Run](https://github.com/${{ github.event.client_payload.repository }}/${{ github.event.client_payload.branch }}/${{ github.event.client_payload.branch }}/actions/runs/${{ github.event.client_payload.runId }})"
+          
 
           echo "> **Note**: Review build logs for test results / security scans before approving."
         } >> $GITHUB_STEP_SUMMARY
