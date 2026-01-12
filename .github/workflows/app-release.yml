@@ -1,6 +1,10 @@
 name: container app release
 
-run-name: ${{ github.event.client_payload.branch }}-${{ github.event.client_payload.appName }}
+run-name: >-
+  ${{ 
+    (github.ref_name == 'main' && 'prod') ||
+    github.ref_name 
+  }}-app1-build
 
 on:
   repository_dispatch:
