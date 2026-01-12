@@ -49,9 +49,17 @@ async function fetchReleaseData() {
       const match = run.name.match(/^(.+?)\s*-\s*(.+?)\s*-\s*release$/i);
       if (match) {
         const [, branch, appName] = match;
+        let currentStatus = 'unknown';
+
+        if (run.status !== 'completed') {
+           currentStatus = 'in_progress';
+         } else {
+           currentStatus = run.conclusion || 'unknown';
+         }
         releases.push({
           appName: appName.trim(),
           branch: branch.trim(),
+          status: currentStatus, 
           link: run.html_url,
         });
       }
@@ -104,6 +112,7 @@ function generateHTML(builds, releases) {
         <tr>
           <th>Application</th>
           <th>Branch</th>
+          <th>Status</th>
           <th>Release Run</th>
         </tr>
       </thead>
@@ -112,6 +121,7 @@ function generateHTML(builds, releases) {
           <tr>
             <td style="font-weight: 500;">${r.appName}</td>
             <td>${r.branch}</td>
+            <td>${r.status}</td>
             <td><a href="${r.link}" target="_blank" rel="noopener noreferrer">View Release →</a></td>
           </tr>
         `).join('')}
