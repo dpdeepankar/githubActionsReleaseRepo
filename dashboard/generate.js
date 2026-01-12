@@ -417,6 +417,7 @@ function generateHTML(builds, releases) {
                         <tr>
                             <th>Application</th>
                             <th>Branch</th>
+                             ${!isBuild ? '<th>Status</th>' : ''}
                             <th>\${title === 'Build' ? 'Latest Run / Workflow' : 'Release Run'}</th>
                         </tr>
                     </thead>
@@ -425,6 +426,7 @@ function generateHTML(builds, releases) {
                             <tr>
                                 <td style="font-weight: 500;">\${item.appName}</td>
                                 <td>\${item.branch}</td>
+                                ${!isBuild ? `<td>${formatStatus(item.status)}</td>` : ''}
                                 <td><a href="\${item.link}" target="_blank" rel="noopener noreferrer">View \${title} →</a></td>
                             </tr>
                         \`).join('')}
