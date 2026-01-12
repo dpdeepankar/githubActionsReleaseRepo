@@ -54,9 +54,9 @@ jobs:
             -H "Accept: applicaiton/vnd.github+json" \
             -f event_type=${{ inputs.appName }} \
             -f client_payload='{
-              "repository":"${{github.repository}}",
-              "branch":"${{ github.ref_name }",
-              "runId":"${{ github.run_id }}",
+              "repository": "${{github.repository}}",
+              "branch": "${{ github.ref_name }}",
+              "runId": "${{ github.run_id }}",
               "appName": ${{ inputs.appName }}",
               "acrName": ${{ inputs.acrName }}",
               "acrResourceGroup": "${{ inputs.acrResourceGroup }}",
