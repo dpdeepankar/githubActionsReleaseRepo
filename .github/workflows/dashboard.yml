@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 */6 * * *'  # Run every 6 hours; adjust as needed
   workflow_dispatch:  # Allow manual trigger
+  
+permissions:
+  id-token: write
 
 jobs:
   build:
