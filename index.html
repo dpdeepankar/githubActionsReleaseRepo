@@ -49,6 +49,14 @@
     <div class="table-container hidden" id="workflow-info">
       <h2 id="workflow-title">Latest Runs</h2>
       <table>
+        <!-- Add this inside .table-container, after <table> -->
+<div id="loading" class="loading hidden">
+  <p>Fetching latest runs from GitHub...</p>
+</div>
+
+<div id="error" class="error hidden">
+  <p>Failed to fetch runs. Check console or try again.</p>
+</div>
         <thead>
           <tr>
             <th>Workflow</th>
