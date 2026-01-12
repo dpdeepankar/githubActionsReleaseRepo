@@ -6,7 +6,7 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
-  generate:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,19 +17,36 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
+        working-directory: ./dashboard
         run: npm install
 
       - name: Generate HTML
+        working-directory: ./dashboard
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}  # Or use a secret PAT: ${{ secrets.MY_PAT }}
           OWNER: ${{ github.repository_owner }}
-          REPO_B: your-repo-b-name  # Hardcode or use vars
-          RELEASE_WORKFLOW_NAME: release.yml
+          REPO_B: githubActionsReleaseRepo  # Hardcode or use vars
+          RELEASE_WORKFLOW_NAME: app-release.yml
         run: node generate.js
 
-      - name: Deploy to gh-pages
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: upload pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          branch: gh-pages
-          folder: .  # Deploy the root (including index.html)
-          clean: true  # Clean old files
+          path: ./dashboard
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+
+      
