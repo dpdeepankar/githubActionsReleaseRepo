@@ -25,8 +25,7 @@ on:
         type: string
         required: true
 
-env:
-    GH_TOKEN: ${{ github.token }}
+
 jobs:
   build-image:
     runs-on: ubuntu-latest
@@ -50,6 +49,8 @@ jobs:
           retention-days: 1
 
       - name: trigger deployment
+        env:
+           GH_TOKEN: ${{ github.PAT }}
         run: |
           gh api repos/dpdeepankar/githubActionsReleaseRepo/dispatches \
             --method POST \
