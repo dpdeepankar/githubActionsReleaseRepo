@@ -4,7 +4,7 @@ run-name: >-
   ${{ 
     (github.event.client_payload.branch == 'main' && 'prod') ||
     github.event.client_payload.branch 
-  }}-${{ github.event.client_payload.appName }}-build
+  }}-${{ github.event.client_payload.appName }}-release
 
 on:
   repository_dispatch:
