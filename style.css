@@ -125,3 +125,12 @@ th { font-weight: 600; opacity: 0.9; }
   gap: 1rem;
   justify-content: center;
 }
+
+.loading, .error {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.1rem;
+}
+
+.loading { color: #a78bfa; }
+.error { color: #ef4444; }
