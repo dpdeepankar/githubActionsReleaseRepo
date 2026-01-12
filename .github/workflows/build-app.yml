@@ -1,0 +1,65 @@
+name: App Build template
+
+on:
+  workflow_call:
+    inputs:
+      appName: 
+        type: string
+        required: true
+      appEnvironment: 
+        type: string
+        required: true
+      workingDirectory:
+        type: string
+        required: true
+      acrName: 
+        type: string
+        required: true
+      acrResourceGroup:
+        type: string
+        required: true
+      acaName: 
+        type: string
+        required: true
+      acaResourceGroup:
+        type: string
+        required: true
+        
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+
+      - name: build docker image
+        run: |
+          docker build -t ${{ inputs.appName }}:${{ github.run_id }} ${{ inputs.workingDirectory }}
+
+      - name: docker save
+        run: |
+          docker save ${{ inputs.appName }}:${{ github.run_id }} -o image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image
+          path: image.tar
+          retention-days: 1
+
+      - name: trigger deployment
+        run: |
+          gh api repos/dpdeepankar/githubActionsReleaseRepo/dispatches \
+            --method POST \
+            -H "Accept: applicaiton/vnd.github+json" \
+            -f event_type=${{ inputs.appName }} \
+            -f client_payload='{
+              "repository":"${{github.repository}}",
+              "branch":"${{ github.ref_name }",
+              "runId":"${{ github.run_id }}",
+              "appName": ${{ inputs.appName }}",
+              "acrName": ${{ inputs.acrName }}",
+              "acrResourceGroup": "${{ inputs.acrResourceGroup }}",
+              "acaName": "${{ inputs.acaName }}",
+              "acaResourceGroup": "${{ inputs.acaResourceGroup }}"
+              }'
