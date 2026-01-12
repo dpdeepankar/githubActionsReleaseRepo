@@ -13,7 +13,7 @@ async function fetchBuildData() {
         owner: config.owner,
         repo: app.repo,
         workflow_id: app.buildWorkflow,
-        per_page: 50,
+        per_page: 5,
       });
 
       const latestRun = runs.workflow_runs[0] || {};
@@ -22,6 +22,8 @@ async function fetchBuildData() {
       builds.push({
         appName: app.name,
         branch: latestRun.head_branch || 'N/A',
+        status: latestRun.status || 'N/A',
+        conclusion: latestRun.conclusion || 'N/A',
         link: buildLink,
       });
     } catch (error) {
@@ -29,6 +31,8 @@ async function fetchBuildData() {
       builds.push({
         appName: app.name,
         branch: 'Not Found',
+        status: 'error',
+        conclusion: 'error',
         link: `https://github.com/${config.owner}/${app.repo}/actions`,
       });
     }
@@ -49,17 +53,11 @@ async function fetchReleaseData() {
       const match = run.name.match(/^(.+?)\s*-\s*(.+?)\s*-\s*release$/i);
       if (match) {
         const [, branch, appName] = match;
-        let currentStatus = 'unknown';
-
-        if (run.status !== 'completed') {
-           currentStatus = 'in_progress';
-         } else {
-           currentStatus = run.conclusion || 'unknown';
-         }
         releases.push({
           appName: appName.trim(),
           branch: branch.trim(),
-          status: currentStatus, 
+          status: run.status || 'N/A',
+          conclusion: run.conclusion || 'N/A',
           link: run.html_url,
         });
       }
@@ -91,6 +89,7 @@ function generateHTML(builds, releases) {
         <tr>
           <th>Application</th>
           <th>Branch</th>
+          <th>Status</th>
           <th>Latest Run / Workflow</th>
         </tr>
       </thead>
@@ -99,6 +98,7 @@ function generateHTML(builds, releases) {
           <tr>
             <td style="font-weight: 500;">${b.appName}</td>
             <td>${b.branch}</td>
+            <td><span class="status-badge status-${getStatusClass(b.status, b.conclusion)}">${getStatusText(b.status, b.conclusion)}</span></td>
             <td><a href="${b.link}" target="_blank" rel="noopener noreferrer">View Build →</a></td>
           </tr>
         `).join('')}
@@ -121,7 +121,7 @@ function generateHTML(builds, releases) {
           <tr>
             <td style="font-weight: 500;">${r.appName}</td>
             <td>${r.branch}</td>
-            <td>${r.status}</td>
+            <td><span class="status-badge status-${getStatusClass(r.status, r.conclusion)}">${getStatusText(r.status, r.conclusion)}</span></td>
             <td><a href="${r.link}" target="_blank" rel="noopener noreferrer">View Release →</a></td>
           </tr>
         `).join('')}
@@ -275,7 +275,7 @@ function generateHTML(builds, releases) {
             border-radius: 0.375rem;
             cursor: pointer;
             font-size: 0.875rem;
-            margin-top: 1.6rem; /* align with selects */
+            margin-top: 1.6rem;
         }
 
         .clear-btn:hover {
@@ -316,6 +316,77 @@ function generateHTML(builds, releases) {
 
         a:hover {
             text-decoration: underline;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-success {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .status-failure {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-in_progress {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-queued {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-cancelled {
+            background-color: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .status-error, .status-na {
+            background-color: #fecaca;
+            color: #7f1d1d;
+        }
+
+        [data-theme="dark"] .status-success {
+            background-color: #064e3b;
+            color: #6ee7b7;
+        }
+
+        [data-theme="dark"] .status-failure {
+            background-color: #7f1d1d;
+            color: #fca5a5;
+        }
+
+        [data-theme="dark"] .status-in_progress {
+            background-color: #1e3a8a;
+            color: #93c5fd;
+        }
+
+        [data-theme="dark"] .status-queued {
+            background-color: #78350f;
+            color: #fde68a;
+        }
+
+        [data-theme="dark"] .status-cancelled {
+            background-color: #374151;
+            color: #d1d5db;
+        }
+
+        [data-theme="dark"] .status-error,
+        [data-theme="dark"] .status-na {
+            background-color: #7f1d1d;
+            color: #fca5a5;
         }
 
         .no-data, .no-results {
@@ -408,6 +479,29 @@ function generateHTML(builds, releases) {
         const buildData = ${JSON.stringify(builds)};
         const releaseData = ${JSON.stringify(releases)};
 
+        function getStatusClass(status, conclusion) {
+            if (status === 'completed') {
+                return conclusion === 'success' ? 'success' : 'failure';
+            }
+            if (status === 'in_progress') return 'in_progress';
+            if (status === 'queued') return 'queued';
+            if (status === 'error') return 'error';
+            return 'na';
+        }
+
+        function getStatusText(status, conclusion) {
+            if (status === 'completed') {
+                if (conclusion === 'success') return '✓ Success';
+                if (conclusion === 'failure') return '✗ Failed';
+                if (conclusion === 'cancelled') return '⊘ Cancelled';
+                return conclusion;
+            }
+            if (status === 'in_progress') return '⟳ Running';
+            if (status === 'queued') return '⧗ Queued';
+            if (status === 'error') return '⚠ Error';
+            return status;
+        }
+
         function renderTable(rows, tab) {
             if (rows.length === 0) return '<div class="no-results">No matching results.</div>';
             const title = tab === 'build' ? 'Build' : 'Release';
@@ -417,7 +511,7 @@ function generateHTML(builds, releases) {
                         <tr>
                             <th>Application</th>
                             <th>Branch</th>
-                             ${!isBuild ? '<th>Status</th>' : ''}
+                            <th>Status</th>
                             <th>\${title === 'Build' ? 'Latest Run / Workflow' : 'Release Run'}</th>
                         </tr>
                     </thead>
@@ -426,7 +520,7 @@ function generateHTML(builds, releases) {
                             <tr>
                                 <td style="font-weight: 500;">\${item.appName}</td>
                                 <td>\${item.branch}</td>
-                                ${!isBuild ? `<td>${formatStatus(item.status)}</td>` : ''}
+                                <td><span class="status-badge status-\${getStatusClass(item.status, item.conclusion)}">\${getStatusText(item.status, item.conclusion)}</span></td>
                                 <td><a href="\${item.link}" target="_blank" rel="noopener noreferrer">View \${title} →</a></td>
                             </tr>
                         \`).join('')}
@@ -471,6 +565,30 @@ function generateHTML(builds, releases) {
 </body>
 </html>
   `;
+}
+
+// Helper functions for status handling
+function getStatusClass(status, conclusion) {
+  if (status === 'completed') {
+    return conclusion === 'success' ? 'success' : 'failure';
+  }
+  if (status === 'in_progress') return 'in_progress';
+  if (status === 'queued') return 'queued';
+  if (status === 'error') return 'error';
+  return 'na';
+}
+
+function getStatusText(status, conclusion) {
+  if (status === 'completed') {
+    if (conclusion === 'success') return '✓ Success';
+    if (conclusion === 'failure') return '✗ Failed';
+    if (conclusion === 'cancelled') return '⊘ Cancelled';
+    return conclusion;
+  }
+  if (status === 'in_progress') return '⟳ Running';
+  if (status === 'queued') return '⧗ Queued';
+  if (status === 'error') return '⚠ Error';
+  return status;
 }
 
 async function main() {
