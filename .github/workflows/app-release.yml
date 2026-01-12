@@ -8,6 +8,31 @@ on:
 
 
 jobs:
+  ApprovalSummary:
+    runs-on: ubuntu-latest
+    steps: 
+     - name: Create Approval Summary for Manager
+       run: |
+        {
+          echo "### Release Approval Summary"
+          echo ""
+          echo "**App**: ${{ github.event.client_payload.appName }}"
+          echo "**Environment**: ${{ github.event.client_payload.branch == 'main' && 'prod' || startsWith(github.event.client_payload.branch, 'dlv') && 'dlv' || 'dev' }}"
+          echo "**Branch / Trigger**: ${{ github.event.client_payload.repository }}/${{ github.event.client_payload.branch }}"
+          echo "**Image**: ${{ github.event.client_payload.appName }}:${{ github.event.client_payload.runId }}"
+          echo "**Full Image**: ${{ github.event.client_payload.acrName }}.azurecr.io/${{ github.event.client_payload.appName }}:${{ github.event.client_payload.runId }}"
+          echo ""
+          echo "**Triggered by**: ${{ github.event.client_payload.repository }} run #${{ github.event.client_payload.runId }}"
+          echo "[View Build Workflow Run](https://github.com/${{ github.event.client_payload.repository }}/${{ github.event.client_payload.branch }}/actions/runs/${{ github.event.client_payload.runId }})"
+          echo ""
+          echo "#### Quick Links"
+          echo "- [Approve / Reject here](#review-deployments)"  # GitHub auto-links to the approval UI
+          echo "- [Container App](${{ github.event.client_payload.acaName }} in RG ${{ github.event.client_payload.acaResourceGroup }})"
+          echo ""
+
+          echo "> **Note**: Review build logs for test results / security scans before approving."
+        } >> $GITHUB_STEP_SUMMARY
+      
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ (startsWith(github.event.client_payload.branch, 'dev') && 'dev') || (startsWith(github.event.client_payload.branch, 'dlv') && 'dlv') ||  (github.event.client_payload.branch == 'main' && 'prod' ) }}
