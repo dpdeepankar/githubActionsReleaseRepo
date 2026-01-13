@@ -1,6 +1,11 @@
 name: Generate Dashboard
 
 on:
+  push:
+   branches:
+     - main
+   paths:
+     - dashboard/*
   schedule:
     - cron: '0 */6 * * *'  # Run every 6 hours; adjust as needed
   workflow_dispatch:  # Allow manual trigger
