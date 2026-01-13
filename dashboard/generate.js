@@ -5,6 +5,8 @@ const config = require('./config');
 
 const octokit = new Octokit({ auth: config.token });
 
+// ──────────────────────────────────────────────
+// Fetch all build workflow runs
 async function fetchBuildData() {
   const builds = [];
   for (const app of config.appRepos) {
@@ -37,7 +39,7 @@ async function fetchBuildData() {
         if (page > 10) break;
       }
     } catch (error) {
-      console.error(`Build fetch error ${app.repo}:`, error.message);
+      console.error(`Build fetch error for ${app.name}:`, error.message);
       builds.push({
         appName: app.name,
         branch: 'N/A',
@@ -49,56 +51,66 @@ async function fetchBuildData() {
     }
   }
 
-  // Default sort: newest first
+  // Default: newest first
   builds.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return builds;
 }
 
+// ──────────────────────────────────────────────
+// Fetch all release workflow runs – one per app
 async function fetchReleaseData() {
   const releases = [];
-  try {
-    let page = 1;
-    let hasMore = true;
+  for (const entry of config.releaseRepos || []) {
+    try {
+      let page = 1;
+      let hasMore = true;
 
-    while (hasMore) {
-      const { data: runs } = await octokit.actions.listWorkflowRuns({
-        owner: config.owner,
-        repo: config.repoB,
-        workflow_id: config.releaseWorkflowName,
-        per_page: 100,
-        page,
-      });
+      while (hasMore) {
+        const { data: runs } = await octokit.actions.listWorkflowRuns({
+          owner: config.owner,
+          repo: entry.repo,
+          workflow_id: entry.releaseWorkflow,
+          per_page: 100,
+          page,
+        });
 
-      for (const run of runs.workflow_runs) {
-        const match = run.name.match(/^(.+?)\s*-\s*(.+?)\s*-\s*release$/i);
-        if (match) {
-          const [, branch, appName] = match;
+        for (const run of runs.workflow_runs) {
           releases.push({
-            appName: appName.trim(),
-            branch: branch.trim(),
+            appName: entry.appName,
+            branch: run.head_branch || 'N/A',
             status: run.status || 'unknown',
             conclusion: run.conclusion || '',
             createdAt: run.created_at || new Date().toISOString(),
             link: run.html_url,
           });
         }
-      }
 
-      hasMore = runs.workflow_runs.length === 100;
-      page++;
-      if (page > 10) break;
+        hasMore = runs.workflow_runs.length === 100;
+        page++;
+        if (page > 10) break;
+      }
+    } catch (error) {
+      console.error(`Release fetch error for ${entry.appName}:`, error.message);
+      releases.push({
+        appName: entry.appName,
+        branch: 'N/A',
+        status: 'error',
+        conclusion: '',
+        createdAt: new Date().toISOString(),
+        link: `https://github.com/${config.owner}/${entry.repo}/actions`,
+      });
     }
-  } catch (error) {
-    console.error('Release fetch error:', error.message);
   }
 
   releases.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return releases;
 }
 
+// ──────────────────────────────────────────────
+// Generate the HTML dashboard
 function generateHTML(builds, releases) {
-  // Unique values for datalist
-  const getUnique = (arr, key) => ['', ...new Set(arr.map(item => item[key])).values()].sort();
+  // Helper to get unique values for filters
+  const getUnique = (arr, key) => ['', ...new Set(arr.map(item => item[key] || 'N/A'))].sort();
 
   const buildApps     = getUnique(builds,    'appName');
   const buildBranches  = getUnique(builds,    'branch');
@@ -268,7 +280,7 @@ function generateHTML(builds, releases) {
 
 <div class="container">
   <header>
-    <h1>Build and Release Dashboard</h1>
+    <h1>Workflow Dashboard</h1>
     <div class="subtitle">Build & Release overview</div>
   </header>
 
@@ -279,7 +291,7 @@ function generateHTML(builds, releases) {
 
   <!-- Build Tab -->
   <div id="build" class="tab-content active">
-   <h3> Build Workflows </h3>
+    <h3> Build Workflows </h3>
     <div class="filters">
       <div class="filter-group">
         <label for="build-app">Application</label>
@@ -366,7 +378,6 @@ function sortData(tab) {
     if (s.sortBy === 'createdAt') {
       return dir * (new Date(a.createdAt) - new Date(b.createdAt));
     }
-    // Add more sort fields here later if needed
     return 0;
   });
 }
@@ -441,7 +452,7 @@ function toggleSort(tab, field) {
     s.sortDir = s.sortDir === 'desc' ? 'asc' : 'desc';
   } else {
     s.sortBy = field;
-    s.sortDir = 'desc'; // default to newest first
+    s.sortDir = 'desc';
   }
   sortData(tab);
   renderTable(tab);
@@ -467,7 +478,6 @@ function applyFilters(tab) {
            (!stVal  || item.status.toLowerCase().includes(stVal));
   });
 
-  // Re-apply current sort after filtering
   sortData(tab);
   s.page = 1;
   renderTable(tab);
@@ -512,7 +522,8 @@ async function main() {
   const builds   = await fetchBuildData();
   const releases = await fetchReleaseData();
 
-  console.log(`Builds: ${builds.length}   Releases: ${releases.length}`);
+  console.log(`Builds fetched: ${builds.length}`);
+  console.log(`Releases fetched: ${releases.length}`);
 
   const html = generateHTML(builds, releases);
   fs.writeFileSync('index.html', html);
@@ -520,7 +531,7 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error(err);
+  console.error('Error:', err.message);
   process.exit(1);
 });
 
