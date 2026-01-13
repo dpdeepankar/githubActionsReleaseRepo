@@ -685,7 +685,7 @@ function generateHTML(builds, releases) {
         <thead>
           <tr>
             <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
-            <th>Commit</th><th>Triggered By</th><th>Time</th><th>Run</th>
+            <th>Commit</th><th>Triggered By</th><th>Time (UTC)</th><th>Run</th>
             <th style="min-width:280px;">Jobs & Steps</th>
           </tr>
         </thead>
@@ -703,7 +703,7 @@ function generateHTML(builds, releases) {
         <thead>
           <tr>
             <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
-            <th>Commit</th><th>Triggered By</th><th>Time</th><th>Run</th>
+            <th>Commit</th><th>Triggered By</th><th>Time (UTC)</th><th>Run</th>
             <th style="min-width:280px;">Jobs & Steps</th>
           </tr>
         </thead>
