@@ -268,7 +268,7 @@ function generateHTML(builds, releases) {
 
 <div class="container">
   <header>
-    <h1>Workflow Dashboard</h1>
+    <h1>Build and Release Dashboard</h1>
     <div class="subtitle">Build & Release overview</div>
   </header>
 
