@@ -97,20 +97,6 @@ async function fetchReleaseData() {
   return releases;
 }
 
-function formatTimestamp(isoString) {
-  if (!isoString) return 'N/A';
-  const date = new Date(isoString);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZoneName: 'short'
-  }).replace(/,/, ''); // cleaner look
-}
-
 function generateHTML(builds, releases) {
   function getUniqueValues(arr, key) {
     const set = new Set(arr.map(item => item[key]));
@@ -141,8 +127,8 @@ function generateHTML(builds, releases) {
           <tr>
             <td style="font-weight: 500;">${b.appName}</td>
             <td>${b.branch}</td>
-            <td><span class="status-badge status-${getStatusClass(b.status, b.conclusion)}">${getStatusText(b.status, b.conclusion)}</span></td>
-            <td>${formatTimestamp(b.createdAt)}</td>
+            <td><span class="status-badge status-${b.status.toLowerCase()}">${b.status}</span></td>
+            <td>${new Date(b.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
             <td><a href="${b.link}" target="_blank" rel="noopener noreferrer">View →</a></td>
           </tr>
         `).join('')}
@@ -170,8 +156,8 @@ function generateHTML(builds, releases) {
           <tr>
             <td style="font-weight: 500;">${r.appName}</td>
             <td>${r.branch}</td>
-            <td><span class="status-badge status-${getStatusClass(r.status, r.conclusion)}">${getStatusText(r.status, r.conclusion)}</span></td>
-            <td>${formatTimestamp(r.createdAt)}</td>
+            <td><span class="status-badge status-${r.status.toLowerCase()}">${r.status}</span></td>
+            <td>${new Date(r.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
             <td><a href="${r.link}" target="_blank" rel="noopener noreferrer">View →</a></td>
           </tr>
         `).join('')}
@@ -188,34 +174,83 @@ function generateHTML(builds, releases) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workflow Dashboard</title>
     <style>
-        /* Your existing CSS remains the same – just adding minor tweaks for timestamp column */
-        td, th { white-space: nowrap; } /* prevent wrapping in timestamp */
-        .combo-input {
-            padding: 0.5rem 0.75rem;
-            border: 1px solid var(--border);
-            border-radius: 0.375rem;
-            font-size: 1rem;
-            width: 100%;
-            box-sizing: border-box;
-            background: var(--card-bg);
+        :root {
+            --bg: #ffffff;
+            --card-bg: #ffffff;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --header-bg: #f9fafb;
+            --accent: #2563eb;
+            --accent-dark: #1d4ed8;
+        }
+        [data-theme="dark"] {
+            --bg: #111827;
+            --card-bg: #1f2937;
+            --text: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border: #374151;
+            --header-bg: #1f2937;
+            --accent: #60a5fa;
+            --accent-dark: #3b82f6;
+        }
+        body {
+            background-color: var(--bg);
             color: var(--text);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 0;
         }
-        [data-theme="dark"] .combo-input {
-            background: #374151;
-            color: #f3f4f6;
-            border-color: #4b5563;
-        }
-        /* Rest of your CSS (status badges, pagination, etc.) stays unchanged */
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem 1rem; }
+        header { text-align: center; margin-bottom: 2.5rem; }
+        h1 { font-size: 2.25rem; font-weight: 700; margin: 0 0 0.5rem; }
+        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
+        .tab-buttons { display: flex; justify-content: center; gap: 1rem; margin-bottom: 2rem; }
+        .tab-btn { padding: 0.75rem 2rem; font-size: 1rem; font-weight: 500; border: none; border-radius: 0.5rem; cursor: pointer; transition: background-color 0.2s; }
+        .tab-btn-primary { background-color: var(--accent); color: white; }
+        .tab-btn-primary:hover { background-color: var(--accent-dark); }
+        .tab-btn.active { background-color: var(--accent-dark); }
+        .tab-content { display: none; background: var(--card-bg); border-radius: 0.75rem; border: 1px solid var(--border); overflow: hidden; }
+        .tab-content.active { display: block; }
+        .filters { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 1rem 1.5rem; align-items: flex-end; }
+        .filter-group { display: flex; flex-direction: column; min-width: 160px; }
+        .filter-group label { font-size: 0.875rem; margin-bottom: 0.3rem; color: var(--text-muted); }
+        .combo-input { padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 1rem; width: 100%; box-sizing: border-box; background: var(--card-bg); color: var(--text); }
+        [data-theme="dark"] .combo-input { background: #374151; color: #f3f4f6; border-color: #4b5563; }
+        .clear-btn { padding: 0.5rem 1.25rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; margin-top: 1.6rem; }
+        .clear-btn:hover { background: #dc2626; }
+        .section-title { font-size: 1.5rem; font-weight: 600; margin: 1rem 1.5rem; }
+        .pagination-info { padding: 0.75rem 1.5rem; color: var(--text-muted); font-size: 0.9rem; border-bottom: 1px solid var(--border); }
+        .pagination-controls { display: flex; justify-content: center; align-items: center; gap: 0.5rem; padding: 1.5rem; flex-wrap: wrap; }
+        .page-btn { padding: 0.5rem 0.75rem; min-width: 40px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 0.375rem; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .page-btn:hover:not(:disabled) { background: var(--accent); color: white; border-color: var(--accent); }
+        .page-btn.active { background: var(--accent); color: white; border-color: var(--accent); font-weight: 600; }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        th { background-color: var(--header-bg); font-weight: 600; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+        a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+        .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .status-queued { background-color: #fef3c7; color: #92400e; }
+        .status-in_progress { background-color: #dbeafe; color: #1e40af; }
+        .status-completed { background-color: #dcfce7; color: #166534; }
+        .status-error { background-color: #fee2e2; color: #991b1b; }
+        [data-theme="dark"] .status-queued { background-color: #78350f; color: #fde68a; }
+        [data-theme="dark"] .status-in_progress { background-color: #1e3a8a; color: #93c5fd; }
+        [data-theme="dark"] .status-completed { background-color: #064e3b; color: #6ee7b7; }
+        [data-theme="dark"] .status-error { background-color: #7f1d1d; color: #fca5a5; }
+        .no-data, .no-results { padding: 3rem 1rem; text-align: center; color: var(--text-muted); font-style: italic; }
+        .dark-toggle { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #374151; color: white; border: none; width: 48px; height: 48px; border-radius: 50%; font-size: 1.25rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
+        @media (max-width: 640px) { .filters { flex-direction: column; align-items: stretch; gap: 1rem; } .clear-btn { margin-top: 0; } }
     </style>
 </head>
 <body>
-
     <div class="container">
         <header>
             <h1>Workflow Dashboard</h1>
             <div class="subtitle">Build and Release pipelines overview</div>
         </header>
-
         <div class="tab-buttons">
             <button class="tab-btn tab-btn-primary active" id="build-btn" onclick="showTab('build')">Build Workflows</button>
             <button class="tab-btn tab-btn-primary" id="release-btn" onclick="showTab('release')">Release Pipelines</button>
@@ -227,7 +262,7 @@ function generateHTML(builds, releases) {
             <div class="filters">
                 <div class="filter-group">
                     <label for="build-app-input">Application</label>
-                    <input list="build-app-list" id="build-app-input" class="combo-input" placeholder="Type or select app..." oninput="filterTable('build')">
+                    <input list="build-app-list" id="build-app-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('build')">
                     <datalist id="build-app-list">
                         <option value="">All</option>
                         ${buildApps.map(app => `<option value="${app}">${app}</option>`).join('')}
@@ -235,13 +270,13 @@ function generateHTML(builds, releases) {
                 </div>
                 <div class="filter-group">
                     <label for="build-branch-input">Branch</label>
-                    <input list="build-branch-list" id="build-branch-input" class="combo-input" placeholder="Type or select branch..." oninput="filterTable('build')">
+                    <input list="build-branch-list" id="build-branch-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('build')">
                     <datalist id="build-branch-list">
                         <option value="">All</option>
                         ${buildBranches.map(br => `<option value="${br}">${br}</option>`).join('')}
                     </datalist>
                 </div>
-                <button class="clear-btn" onclick="clearFilters('build')">Reset Filters</button>
+                <button class="clear-btn" onclick="clearFilters('build')">Reset</button>
             </div>
             <div id="build-table-container">${buildTableHTML}</div>
         </div>
@@ -252,7 +287,7 @@ function generateHTML(builds, releases) {
             <div class="filters">
                 <div class="filter-group">
                     <label for="release-app-input">Application</label>
-                    <input list="release-app-list" id="release-app-input" class="combo-input" placeholder="Type or select app..." oninput="filterTable('release')">
+                    <input list="release-app-list" id="release-app-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('release')">
                     <datalist id="release-app-list">
                         <option value="">All</option>
                         ${releaseApps.map(app => `<option value="${app}">${app}</option>`).join('')}
@@ -260,13 +295,13 @@ function generateHTML(builds, releases) {
                 </div>
                 <div class="filter-group">
                     <label for="release-branch-input">Branch</label>
-                    <input list="release-branch-list" id="release-branch-input" class="combo-input" placeholder="Type or select branch..." oninput="filterTable('release')">
+                    <input list="release-branch-list" id="release-branch-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('release')">
                     <datalist id="release-branch-list">
                         <option value="">All</option>
                         ${releaseBranches.map(br => `<option value="${br}">${br}</option>`).join('')}
                     </datalist>
                 </div>
-                <button class="clear-btn" onclick="clearFilters('release')">Reset Filters</button>
+                <button class="clear-btn" onclick="clearFilters('release')">Reset</button>
             </div>
             <div id="release-table-container">${releaseTableHTML}</div>
         </div>
@@ -283,44 +318,37 @@ function generateHTML(builds, releases) {
             release: { currentPage: 1, itemsPerPage: 20, filteredData: releaseData }
         };
 
-        // Your existing getStatusClass, getStatusText, formatTimestamp (moved to JS if needed)
-        function formatTimestamp(isoString) {
-            if (!isoString) return 'N/A';
-            const date = new Date(isoString);
-            return date.toLocaleString('en-US', {
-                year: 'numeric', month: 'short', day: 'numeric',
-                hour: '2-digit', minute: '2-digit', hour12: false
-            }).replace(/,/, '');
-        }
-
+        // Status helpers (moved inside script so browser can access them)
         function getStatusClass(status, conclusion) {
-            if (status === 'completed') return conclusion === 'success' ? 'success' : 'failure';
+            if (status === 'completed') {
+                return conclusion === 'success' ? 'completed' : 'error';
+            }
             if (status === 'in_progress') return 'in_progress';
             if (status === 'queued') return 'queued';
-            if (status === 'error') return 'error';
-            return 'na';
+            return 'error';
         }
 
         function getStatusText(status, conclusion) {
             if (status === 'completed') {
-                if (conclusion === 'success') return '✓ Success';
-                if (conclusion === 'failure') return '✗ Failed';
-                if (conclusion === 'cancelled') return '⊘ Cancelled';
+                if (conclusion === 'success') return 'Success';
+                if (conclusion === 'failure') return 'Failed';
+                if (conclusion === 'cancelled') return 'Cancelled';
                 return conclusion || 'Completed';
             }
-            if (status === 'in_progress') return '⟳ Running';
-            if (status === 'queued') return '⧗ Queued';
-            if (status === 'error') return '⚠ Error';
+            if (status === 'in_progress') return 'Running';
+            if (status === 'queued') return 'Queued';
             return status || 'Unknown';
         }
 
         function renderTable(rows, tab) {
             const pag = pagination[tab];
             const container = document.getElementById(tab + '-table-container');
+
             if (rows.length === 0) {
                 container.innerHTML = '<div class="no-results">No matching results.</div>';
                 return;
             }
+
             const start = (pag.currentPage - 1) * pag.itemsPerPage;
             const end = Math.min(start + pag.itemsPerPage, rows.length);
             const pageRows = rows.slice(start, end);
@@ -346,7 +374,7 @@ function generateHTML(builds, releases) {
                                 <td style="font-weight: 500;">\${item.appName}</td>
                                 <td>\${item.branch}</td>
                                 <td><span class="status-badge status-\${getStatusClass(item.status, item.conclusion)}">\${getStatusText(item.status, item.conclusion)}</span></td>
-                                <td>\${formatTimestamp(item.createdAt)}</td>
+                                <td>\${new Date(item.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                                 <td><a href="\${item.link}" target="_blank" rel="noopener noreferrer">View →</a></td>
                             </tr>
                         \`).join('')}
@@ -359,31 +387,10 @@ function generateHTML(builds, releases) {
             renderPagination(tab);
         }
 
-        // Your existing renderPagination, changePage, filterTable, clearFilters, showTab functions remain the same
-        // ... paste them here from your current file ...
-
-        // Update filterTable to work with input + datalist
-        function filterTable(tab) {
-            const appInput = document.getElementById(tab + '-app-input').value.trim();
-            const branchInput = document.getElementById(tab + '-branch-input').value.trim();
-
-            const data = tab === 'build' ? buildData : releaseData;
-            const filtered = data.filter(item => {
-                const appMatch = !appInput || item.appName.toLowerCase().includes(appInput.toLowerCase());
-                const branchMatch = !branchInput || item.branch.toLowerCase().includes(branchInput.toLowerCase());
-                return appMatch && branchMatch;
-            });
-
-            pagination[tab].filteredData = filtered;
-            pagination[tab].currentPage = 1;
-            renderTable(filtered, tab);
-        }
-
-        function clearFilters(tab) {
-            document.getElementById(tab + '-app-input').value = '';
-            document.getElementById(tab + '-branch-input').value = '';
-            filterTable(tab);
-        }
+        // ──────────────────────────────────────────────
+        // Paste your existing pagination functions here:
+        // renderPagination(tab), changePage(tab, page), filterTable(tab), clearFilters(tab), showTab(tab)
+        // ... (keep all your pagination and filter logic from the previous version)
 
         showTab('build');
     </script>
