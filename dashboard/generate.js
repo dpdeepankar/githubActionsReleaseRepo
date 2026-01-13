@@ -279,6 +279,7 @@ function generateHTML(builds, releases) {
 
   <!-- Build Tab -->
   <div id="build" class="tab-content active">
+   <h3> Build Workflows </h3>
     <div class="filters">
       <div class="filter-group">
         <label for="build-app">Application</label>
@@ -304,6 +305,7 @@ function generateHTML(builds, releases) {
 
   <!-- Release Tab -->
   <div id="release" class="tab-content">
+    <h3> Release Workflows </h3>
     <div class="filters">
       <div class="filter-group">
         <label for="release-app">Application</label>
