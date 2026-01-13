@@ -18,32 +18,31 @@ async function fetchBuildData() {
           repo: app.repo,
           workflow_id: app.buildWorkflow,
           per_page: 100,
-          page: page,
+          page,
         });
 
         for (const run of runs.workflow_runs) {
           builds.push({
             appName: app.name,
             branch: run.head_branch || 'N/A',
-            status: run.status || 'N/A',
-            conclusion: run.conclusion || 'N/A',
-            createdAt: run.created_at,
+            status: run.status || 'unknown',
+            conclusion: run.conclusion || '',
+            createdAt: run.created_at || new Date().toISOString(),
             link: run.html_url,
           });
         }
 
         hasMore = runs.workflow_runs.length === 100;
         page++;
-
         if (page > 10) break;
       }
     } catch (error) {
-      console.error(`Error fetching build for ${app.repo} (${app.buildWorkflow}):`, error.message);
+      console.error(`Build fetch error ${app.repo}:`, error.message);
       builds.push({
         appName: app.name,
-        branch: 'Not Found',
+        branch: 'N/A',
         status: 'error',
-        conclusion: 'error',
+        conclusion: '',
         createdAt: new Date().toISOString(),
         link: `https://github.com/${config.owner}/${app.repo}/actions`,
       });
@@ -66,7 +65,7 @@ async function fetchReleaseData() {
         repo: config.repoB,
         workflow_id: config.releaseWorkflowName,
         per_page: 100,
-        page: page,
+        page,
       });
 
       for (const run of runs.workflow_runs) {
@@ -76,9 +75,9 @@ async function fetchReleaseData() {
           releases.push({
             appName: appName.trim(),
             branch: branch.trim(),
-            status: run.status || 'N/A',
-            conclusion: run.conclusion || 'N/A',
-            createdAt: run.created_at,
+            status: run.status || 'unknown',
+            conclusion: run.conclusion || '',
+            createdAt: run.created_at || new Date().toISOString(),
             link: run.html_url,
           });
         }
@@ -86,11 +85,10 @@ async function fetchReleaseData() {
 
       hasMore = runs.workflow_runs.length === 100;
       page++;
-
       if (page > 10) break;
     }
   } catch (error) {
-    console.error(`Error fetching releases from ${config.repoB}:`, error.message);
+    console.error('Release fetch error:', error.message);
   }
 
   releases.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -98,301 +96,413 @@ async function fetchReleaseData() {
 }
 
 function generateHTML(builds, releases) {
-  function getUniqueValues(arr, key) {
-    const set = new Set(arr.map(item => item[key]));
-    return Array.from(set).sort();
-  }
+  // Unique values for datalist filters
+  const getUnique = (arr, key) => ['', ...new Set(arr.map(item => item[key])).values()].sort();
 
-  const buildApps = getUniqueValues(builds, 'appName');
-  const buildBranches = getUniqueValues(builds, 'branch');
-  const releaseApps = getUniqueValues(releases, 'appName');
-  const releaseBranches = getUniqueValues(releases, 'branch');
+  const buildApps    = getUnique(builds,    'appName');
+  const buildBranches = getUnique(builds,    'branch');
+  const buildStatuses = getUnique(builds,    'status');
 
-  const buildTableHTML = builds.length > 0 ? `
-    <div class="pagination-info">
-      <span>Showing <span id="build-start">1</span>-<span id="build-end">20</span> of <span id="build-total">${builds.length}</span> builds</span>
-    </div>
-    <table id="build-table">
-      <thead>
-        <tr>
-          <th>Application</th>
-          <th>Branch</th>
-          <th>Status</th>
-          <th>Timestamp</th>
-          <th>Run Link</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${builds.slice(0, 20).map(b => `
-          <tr>
-            <td style="font-weight: 500;">${b.appName}</td>
-            <td>${b.branch}</td>
-            <td><span class="status-badge status-${b.status.toLowerCase()}">${b.status}</span></td>
-            <td>${new Date(b.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-            <td><a href="${b.link}" target="_blank" rel="noopener noreferrer">View →</a></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-    <div class="pagination-controls" id="build-pagination"></div>
-  ` : '<div class="no-data">No build information available.</div>';
-
-  const releaseTableHTML = releases.length > 0 ? `
-    <div class="pagination-info">
-      <span>Showing <span id="release-start">1</span>-<span id="release-end">20</span> of <span id="release-total">${releases.length}</span> releases</span>
-    </div>
-    <table id="release-table">
-      <thead>
-        <tr>
-          <th>Application</th>
-          <th>Branch</th>
-          <th>Status</th>
-          <th>Timestamp</th>
-          <th>Run Link</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${releases.slice(0, 20).map(r => `
-          <tr>
-            <td style="font-weight: 500;">${r.appName}</td>
-            <td>${r.branch}</td>
-            <td><span class="status-badge status-${r.status.toLowerCase()}">${r.status}</span></td>
-            <td>${new Date(r.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-            <td><a href="${r.link}" target="_blank" rel="noopener noreferrer">View →</a></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-    <div class="pagination-controls" id="release-pagination"></div>
-  ` : '<div class="no-data">No release information available.</div>';
+  const relApps      = getUnique(releases, 'appName');
+  const relBranches  = getUnique(releases, 'branch');
+  const relStatuses  = getUnique(releases, 'status');
 
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workflow Dashboard</title>
-    <style>
-        :root {
-            --bg: #ffffff;
-            --card-bg: #ffffff;
-            --text: #111827;
-            --text-muted: #6b7280;
-            --border: #e5e7eb;
-            --header-bg: #f9fafb;
-            --accent: #2563eb;
-            --accent-dark: #1d4ed8;
-        }
-        [data-theme="dark"] {
-            --bg: #111827;
-            --card-bg: #1f2937;
-            --text: #f3f4f6;
-            --text-muted: #9ca3af;
-            --border: #374151;
-            --header-bg: #1f2937;
-            --accent: #60a5fa;
-            --accent-dark: #3b82f6;
-        }
-        body {
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-        }
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem 1rem; }
-        header { text-align: center; margin-bottom: 2.5rem; }
-        h1 { font-size: 2.25rem; font-weight: 700; margin: 0 0 0.5rem; }
-        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
-        .tab-buttons { display: flex; justify-content: center; gap: 1rem; margin-bottom: 2rem; }
-        .tab-btn { padding: 0.75rem 2rem; font-size: 1rem; font-weight: 500; border: none; border-radius: 0.5rem; cursor: pointer; transition: background-color 0.2s; }
-        .tab-btn-primary { background-color: var(--accent); color: white; }
-        .tab-btn-primary:hover { background-color: var(--accent-dark); }
-        .tab-btn.active { background-color: var(--accent-dark); }
-        .tab-content { display: none; background: var(--card-bg); border-radius: 0.75rem; border: 1px solid var(--border); overflow: hidden; }
-        .tab-content.active { display: block; }
-        .filters { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 1rem 1.5rem; align-items: flex-end; }
-        .filter-group { display: flex; flex-direction: column; min-width: 160px; }
-        .filter-group label { font-size: 0.875rem; margin-bottom: 0.3rem; color: var(--text-muted); }
-        .combo-input { padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 1rem; width: 100%; box-sizing: border-box; background: var(--card-bg); color: var(--text); }
-        [data-theme="dark"] .combo-input { background: #374151; color: #f3f4f6; border-color: #4b5563; }
-        .clear-btn { padding: 0.5rem 1.25rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; margin-top: 1.6rem; }
-        .clear-btn:hover { background: #dc2626; }
-        .section-title { font-size: 1.5rem; font-weight: 600; margin: 1rem 1.5rem; }
-        .pagination-info { padding: 0.75rem 1.5rem; color: var(--text-muted); font-size: 0.9rem; border-bottom: 1px solid var(--border); }
-        .pagination-controls { display: flex; justify-content: center; align-items: center; gap: 0.5rem; padding: 1.5rem; flex-wrap: wrap; }
-        .page-btn { padding: 0.5rem 0.75rem; min-width: 40px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 0.375rem; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
-        .page-btn:hover:not(:disabled) { background: var(--accent); color: white; border-color: var(--accent); }
-        .page-btn.active { background: var(--accent); color: white; border-color: var(--accent); font-weight: 600; }
-        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-        th { background-color: var(--header-bg); font-weight: 600; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
-        a { color: var(--accent); text-decoration: none; font-weight: 500; }
-        a:hover { text-decoration: underline; }
-        .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-        .status-queued { background-color: #fef3c7; color: #92400e; }
-        .status-in_progress { background-color: #dbeafe; color: #1e40af; }
-        .status-completed { background-color: #dcfce7; color: #166534; }
-        .status-error { background-color: #fee2e2; color: #991b1b; }
-        [data-theme="dark"] .status-queued { background-color: #78350f; color: #fde68a; }
-        [data-theme="dark"] .status-in_progress { background-color: #1e3a8a; color: #93c5fd; }
-        [data-theme="dark"] .status-completed { background-color: #064e3b; color: #6ee7b7; }
-        [data-theme="dark"] .status-error { background-color: #7f1d1d; color: #fca5a5; }
-        .no-data, .no-results { padding: 3rem 1rem; text-align: center; color: var(--text-muted); font-style: italic; }
-        .dark-toggle { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #374151; color: white; border: none; width: 48px; height: 48px; border-radius: 50%; font-size: 1.25rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
-        @media (max-width: 640px) { .filters { flex-direction: column; align-items: stretch; gap: 1rem; } .clear-btn { margin-top: 0; } }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CI/CD Dashboard</title>
+  <style>
+    :root {
+      --bg: #f8f9fc;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e2e8f0;
+      --accent: #3b82f6;
+      --accent-dark: #2563eb;
+    }
+    [data-theme="dark"] {
+      --bg: #111827;
+      --card: #1f2937;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --border: #374151;
+      --accent: #60a5fa;
+      --accent-dark: #3b82f6;
+    }
+    body {
+      margin:0;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container { max-width: 1440px; margin: 0 auto; padding: 2rem 1rem; }
+    header { text-align:center; margin-bottom: 2.5rem; }
+    h1 { font-size: 2.25rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--muted); }
+
+    .tabs { display:flex; justify-content:center; gap:1rem; margin-bottom:2rem; }
+    .tab-btn {
+      padding: 0.75rem 2rem;
+      font-weight: 500;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { background: var(--accent-dark); }
+    .tab-btn.active { background: var(--accent-dark); box-shadow: 0 2px 6px rgba(59,130,246,0.3); }
+
+    .tab-content { display:none; background:var(--card); border-radius:0.75rem; border:1px solid var(--border); overflow:hidden; }
+    .tab-content.active { display:block; }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      padding: 1rem 1.5rem;
+      background: rgba(243,244,246,0.4);
+      border-bottom: 1px solid var(--border);
+    }
+    [data-theme="dark"] .filters { background: rgba(55,65,81,0.4); }
+
+    .filter-group { flex: 1 1 220px; min-width: 180px; }
+    .filter-group label { font-size:0.875rem; color:var(--muted); display:block; margin-bottom:0.35rem; }
+    .filter-input {
+      width:100%;
+      padding:0.5rem 0.75rem;
+      border:1px solid var(--border);
+      border-radius:0.375rem;
+      font-size:1rem;
+      background:var(--card);
+      color:var(--text);
+    }
+    [data-theme="dark"] .filter-input { background:#374151; border-color:#4b5563; color:#f3f4f6; }
+
+    .clear-btn {
+      padding:0.5rem 1.25rem;
+      background:#ef4444;
+      color:white;
+      border:none;
+      border-radius:0.375rem;
+      cursor:pointer;
+      font-size:0.875rem;
+      align-self:flex-end;
+    }
+    .clear-btn:hover { background:#dc2626; }
+
+    .table-container { padding:0 1.5rem 1.5rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:1rem; text-align:left; border-bottom:1px solid var(--border); }
+    th {
+      background:var(--header-bg || #f9fafb);
+      font-weight:600;
+      color:var(--muted);
+      text-transform:uppercase;
+      font-size:0.875rem;
+      letter-spacing:0.4px;
+    }
+    [data-theme="dark"] th { background:#1f2937; }
+
+    .status {
+      display:inline-block;
+      padding:0.25rem 0.75rem;
+      border-radius:9999px;
+      font-size:0.75rem;
+      font-weight:600;
+      text-transform:uppercase;
+    }
+    .status-queued    { background:#fef3c7; color:#92400e; }
+    .status-in_progress { background:#dbeafe; color:#1e40af; }
+    .status-completed { background:#dcfce7; color:#166534; }
+    .status-failure   { background:#fee2e2; color:#991b1b; }
+    .status-cancelled { background:#f3f4f6; color:#4b5563; }
+    .status-error     { background:#fee2e2; color:#991b1b; }
+    [data-theme="dark"] .status-queued    { background:#78350f; color:#fde68a; }
+    [data-theme="dark"] .status-in_progress { background:#1e3a8a; color:#93c5fd; }
+    [data-theme="dark"] .status-completed { background:#064e3b; color:#6ee7b7; }
+    [data-theme="dark"] .status-failure   { background:#7f1d1d; color:#fca5a5; }
+    [data-theme="dark"] .status-cancelled { background:#374151; color:#d1d5db; }
+    [data-theme="dark"] .status-error     { background:#7f1d1d; color:#fca5a5; }
+
+    .pagination {
+      display:flex;
+      justify-content:center;
+      gap:0.5rem;
+      padding:1.5rem;
+      flex-wrap:wrap;
+    }
+    .page-btn {
+      padding:0.5rem 0.9rem;
+      min-width:40px;
+      border:1px solid var(--border);
+      background:var(--card);
+      color:var(--text);
+      border-radius:0.375rem;
+      cursor:pointer;
+    }
+    .page-btn:hover:not(:disabled) { background:var(--accent); color:white; border-color:var(--accent); }
+    .page-btn.active { background:var(--accent); color:white; border-color:var(--accent); font-weight:600; }
+    .page-btn:disabled { opacity:0.5; cursor:not-allowed; }
+
+    .no-results { padding:4rem 1rem; text-align:center; color:var(--muted); font-style:italic; }
+
+    .dark-toggle {
+      position:fixed;
+      bottom:1.5rem;
+      right:1.5rem;
+      background:#374151;
+      color:white;
+      border:none;
+      width:48px;
+      height:48px;
+      border-radius:50%;
+      font-size:1.25rem;
+      cursor:pointer;
+      box-shadow:0 2px 10px rgba(0,0,0,0.25);
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Workflow Dashboard</h1>
-            <div class="subtitle">Build and Release pipelines overview</div>
-        </header>
-        <div class="tab-buttons">
-            <button class="tab-btn tab-btn-primary active" id="build-btn" onclick="showTab('build')">Build Workflows</button>
-            <button class="tab-btn tab-btn-primary" id="release-btn" onclick="showTab('release')">Release Pipelines</button>
-        </div>
 
-        <!-- Build Tab -->
-        <div id="build-tab" class="tab-content active">
-            <div class="section-title">Build Workflows</div>
-            <div class="filters">
-                <div class="filter-group">
-                    <label for="build-app-input">Application</label>
-                    <input list="build-app-list" id="build-app-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('build')">
-                    <datalist id="build-app-list">
-                        <option value="">All</option>
-                        ${buildApps.map(app => `<option value="${app}">${app}</option>`).join('')}
-                    </datalist>
-                </div>
-                <div class="filter-group">
-                    <label for="build-branch-input">Branch</label>
-                    <input list="build-branch-list" id="build-branch-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('build')">
-                    <datalist id="build-branch-list">
-                        <option value="">All</option>
-                        ${buildBranches.map(br => `<option value="${br}">${br}</option>`).join('')}
-                    </datalist>
-                </div>
-                <button class="clear-btn" onclick="clearFilters('build')">Reset</button>
-            </div>
-            <div id="build-table-container">${buildTableHTML}</div>
-        </div>
+<div class="container">
+  <header>
+    <h1>Workflow Dashboard</h1>
+    <div class="subtitle">Build & Release overview</div>
+  </header>
 
-        <!-- Release Tab -->
-        <div id="release-tab" class="tab-content">
-            <div class="section-title">Release Pipelines</div>
-            <div class="filters">
-                <div class="filter-group">
-                    <label for="release-app-input">Application</label>
-                    <input list="release-app-list" id="release-app-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('release')">
-                    <datalist id="release-app-list">
-                        <option value="">All</option>
-                        ${releaseApps.map(app => `<option value="${app}">${app}</option>`).join('')}
-                    </datalist>
-                </div>
-                <div class="filter-group">
-                    <label for="release-branch-input">Branch</label>
-                    <input list="release-branch-list" id="release-branch-input" class="combo-input" placeholder="Type or select..." oninput="filterTable('release')">
-                    <datalist id="release-branch-list">
-                        <option value="">All</option>
-                        ${releaseBranches.map(br => `<option value="${br}">${br}</option>`).join('')}
-                    </datalist>
-                </div>
-                <button class="clear-btn" onclick="clearFilters('release')">Reset</button>
-            </div>
-            <div id="release-table-container">${releaseTableHTML}</div>
-        </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="build">Build Workflows</button>
+    <button class="tab-btn" data-tab="release">Release Pipelines</button>
+  </div>
+
+  <!-- Build Tab -->
+  <div id="build" class="tab-content active">
+    <div class="filters">
+      <div class="filter-group">
+        <label for="build-app">Application</label>
+        <input list="build-apps" id="build-app" class="filter-input" placeholder="Type or select..." autocomplete="off">
+        <datalist id="build-apps">
+          <option value="">All</option>
+          ${buildApps.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </datalist>
+      </div>
+      <div class="filter-group">
+        <label for="build-branch">Branch</label>
+        <input list="build-branches" id="build-branch" class="filter-input" placeholder="Type or select..." autocomplete="off">
+        <datalist id="build-branches">
+          <option value="">All</option>
+          ${buildBranches.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </datalist>
+      </div>
+      <div class="filter-group">
+        <label for="build-status">Status</label>
+        <input list="build-statuses" id="build-status" class="filter-input" placeholder="Type or select..." autocomplete="off">
+        <datalist id="build-statuses">
+          <option value="">All</option>
+          ${buildStatuses.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </datalist>
+      </div>
+      <button class="clear-btn" onclick="clearFilters('build')">Clear</button>
     </div>
 
-    <button class="dark-toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? '' : 'dark'" title="Toggle dark mode">🌙</button>
+    <div id="build-table-container"></div>
+    <div id="build-pagination" class="pagination"></div>
+  </div>
 
-    <script>
-        const buildData = ${JSON.stringify(builds)};
-        const releaseData = ${JSON.stringify(releases)};
+  <!-- Release Tab -->
+  <div id="release" class="tab-content">
+    <div class="filters">
+      <div class="filter-group">
+        <label for="release-app">Application</label>
+        <input list="release-apps" id="release-app" class="filter-input" placeholder="Type or select..." autocomplete="off">
+        <datalist id="release-apps">
+          <option value="">All</option>
+          ${relApps.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </datalist>
+      </div>
+      <div class="filter-group">
+        <label for="release-branch">Branch</label>
+        <input list="release-branches" id="release-branch" class="filter-input" placeholder="Type or select..." autocomplete="off">
+        <datalist id="release-branches">
+          <option value="">All</option>
+          ${relBranches.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </datalist>
+      </div>
+      <div class="filter-group">
+        <label for="release-status">Status</label>
+        <input list="release-statuses" id="release-status" class="filter-input" placeholder="Type or select..." autocomplete="off">
+        <datalist id="release-statuses">
+          <option value="">All</option>
+          ${relStatuses.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </datalist>
+      </div>
+      <button class="clear-btn" onclick="clearFilters('release')">Clear</button>
+    </div>
 
-        const pagination = {
-            build: { currentPage: 1, itemsPerPage: 20, filteredData: buildData },
-            release: { currentPage: 1, itemsPerPage: 20, filteredData: releaseData }
-        };
+    <div id="release-table-container"></div>
+    <div id="release-pagination" class="pagination"></div>
+  </div>
+</div>
 
-        // Status helpers (moved inside script so browser can access them)
-        function getStatusClass(status, conclusion) {
-            if (status === 'completed') {
-                return conclusion === 'success' ? 'completed' : 'error';
-            }
-            if (status === 'in_progress') return 'in_progress';
-            if (status === 'queued') return 'queued';
-            return 'error';
-        }
+<button class="dark-toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? '' : 'dark'">🌙</button>
 
-        function getStatusText(status, conclusion) {
-            if (status === 'completed') {
-                if (conclusion === 'success') return 'Success';
-                if (conclusion === 'failure') return 'Failed';
-                if (conclusion === 'cancelled') return 'Cancelled';
-                return conclusion || 'Completed';
-            }
-            if (status === 'in_progress') return 'Running';
-            if (status === 'queued') return 'Queued';
-            return status || 'Unknown';
-        }
+<script>
+const ITEMS_PER_PAGE = 15;
 
-        function renderTable(rows, tab) {
-            const pag = pagination[tab];
-            const container = document.getElementById(tab + '-table-container');
+const state = {
+  build:   { data: ${JSON.stringify(builds)},   filtered: [], page: 1 },
+  release: { data: ${JSON.stringify(releases)}, filtered: [], page: 1 }
+};
 
-            if (rows.length === 0) {
-                container.innerHTML = '<div class="no-results">No matching results.</div>';
-                return;
-            }
+function formatTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).replace(',', '');
+}
 
-            const start = (pag.currentPage - 1) * pag.itemsPerPage;
-            const end = Math.min(start + pag.itemsPerPage, rows.length);
-            const pageRows = rows.slice(start, end);
+function getStatusClass(s) {
+  s = (s || '').toLowerCase();
+  if (s.includes('success') || s === 'completed' && !s.includes('fail')) return 'completed';
+  if (s.includes('fail') || s === 'failure' || s === 'error') return 'failure';
+  if (s === 'in_progress' || s === 'running') return 'in_progress';
+  if (s === 'queued') return 'queued';
+  if (s === 'cancelled') return 'cancelled';
+  return 'unknown';
+}
 
-            const title = tab === 'build' ? 'Build' : 'Release';
-            const html = \`
-                <div class="pagination-info">
-                    <span>Showing <span id="\${tab}-start">\${start + 1}</span>-<span id="\${tab}-end">\${end}</span> of <span id="\${tab}-total">\${rows.length}</span> \${tab}s</span>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Application</th>
-                            <th>Branch</th>
-                            <th>Status</th>
-                            <th>Timestamp</th>
-                            <th>Run Link</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        \${pageRows.map(item => \`
-                            <tr>
-                                <td style="font-weight: 500;">\${item.appName}</td>
-                                <td>\${item.branch}</td>
-                                <td><span class="status-badge status-\${getStatusClass(item.status, item.conclusion)}">\${getStatusText(item.status, item.conclusion)}</span></td>
-                                <td>\${new Date(item.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                                <td><a href="\${item.link}" target="_blank" rel="noopener noreferrer">View →</a></td>
-                            </tr>
-                        \`).join('')}
-                    </tbody>
-                </table>
-                <div class="pagination-controls" id="\${tab}-pagination"></div>
-            \`;
+function renderTable(tab) {
+  const s = state[tab];
+  const container = document.getElementById(tab + '-table-container');
+  const pag = document.getElementById(tab + '-pagination');
 
-            container.innerHTML = html;
-            renderPagination(tab);
-        }
+  if (s.filtered.length === 0) {
+    container.innerHTML = '<div class="no-results">No matching workflows found.</div>';
+    pag.innerHTML = '';
+    return;
+  }
 
-        // ──────────────────────────────────────────────
-        // Paste your existing pagination functions here:
-        // renderPagination(tab), changePage(tab, page), filterTable(tab), clearFilters(tab), showTab(tab)
-        // ... (keep all your pagination and filter logic from the previous version)
+  const start = (s.page - 1) * ITEMS_PER_PAGE;
+  const end   = Math.min(start + ITEMS_PER_PAGE, s.filtered.length);
+  const pageItems = s.filtered.slice(start, end);
 
-        showTab('build');
+  let html = \`
+    <table>
+      <thead>
+        <tr>
+          <th>Application</th>
+          <th>Branch</th>
+          <th>Status</th>
+          <th>Timestamp</th>
+          <th>Run Link</th>
+        </tr>
+      </thead>
+      <tbody>
+  \`;
+
+  pageItems.forEach(item => {
+    html += \`
+      <tr>
+        <td>\${item.appName}</td>
+        <td>\${item.branch}</td>
+        <td><span class="status status-\${getStatusClass(item.status)}">\${item.status}</span></td>
+        <td>\${formatTime(item.createdAt)}</td>
+        <td><a href="\${item.link}" target="_blank" rel="noopener">View run →</a></td>
+      </tr>
+    \`;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+
+  // Pagination controls
+  const totalPages = Math.ceil(s.filtered.length / ITEMS_PER_PAGE);
+  let pagHtml = '';
+
+  if (totalPages > 1) {
+    pagHtml += \`<button \${s.page===1?'disabled':''} onclick="changePage('\${tab}', \${s.page-1})">← Prev</button>\`;
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === s.page) {
+        pagHtml += \`<button class="active">\${i}</button>\`;
+      } else if (i === 1 || i === totalPages || Math.abs(i - s.page) <= 2) {
+        pagHtml += \`<button onclick="changePage('\${tab}', \${i})">\${i}</button>\`;
+      } else if (Math.abs(i - s.page) === 3) {
+        pagHtml += '<span>...</span>';
+      }
+    }
+
+    pagHtml += \`<button \${s.page===totalPages?'disabled':''} onclick="changePage('\${tab}', \${s.page+1})">Next →</button>\`;
+  }
+
+  pag.innerHTML = pagHtml;
+}
+
+function changePage(tab, page) {
+  const s = state[tab];
+  const total = Math.ceil(s.filtered.length / ITEMS_PER_PAGE);
+  if (page < 1 || page > total) return;
+  s.page = page;
+  renderTable(tab);
+}
+
+function applyFilters(tab) {
+  const s = state[tab];
+  const appVal = document.getElementById(tab + '-app').value.trim().toLowerCase();
+  const brVal  = document.getElementById(tab + '-branch').value.trim().toLowerCase();
+  const stVal  = document.getElementById(tab + '-status').value.trim().toLowerCase();
+
+  s.filtered = s.data.filter(item => {
+    return (!appVal || item.appName.toLowerCase().includes(appVal)) &&
+           (!brVal  || item.branch.toLowerCase().includes(brVal))  &&
+           (!stVal  || item.status.toLowerCase().includes(stVal));
+  });
+
+  s.page = 1;
+  renderTable(tab);
+}
+
+function clearFilters(tab) {
+  document.getElementById(tab + '-app').value = '';
+  document.getElementById(tab + '-branch').value = '';
+  document.getElementById(tab + '-status').value = '';
+  applyFilters(tab);
+}
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tab).classList.add('active');
+    btn.classList.add('active');
+    applyFilters(tab);
+  });
+});
+
+// Live filtering
+['build', 'release'].forEach(tab => {
+  ['app','branch','status'].forEach(f => {
+    document.getElementById(tab + '-' + f).addEventListener('input', () => applyFilters(tab));
+  });
+});
+
+// Initial render
+applyFilters('build');
     </script>
 </body>
 </html>
@@ -400,19 +510,18 @@ function generateHTML(builds, releases) {
 }
 
 async function main() {
-  console.log('Fetching workflow data...');
-  const builds = await fetchBuildData();
-  console.log(`Fetched ${builds.length} build workflows`);
-
+  console.log('Fetching data...');
+  const builds   = await fetchBuildData();
   const releases = await fetchReleaseData();
-  console.log(`Fetched ${releases.length} release workflows`);
+
+  console.log(`Builds: ${builds.length}   Releases: ${releases.length}`);
 
   const html = generateHTML(builds, releases);
   fs.writeFileSync('index.html', html);
-  console.log('Generated index.html successfully!');
+  console.log('index.html generated');
 }
 
 main().catch(err => {
-  console.error('Fatal error:', err);
+  console.error(err);
   process.exit(1);
 });
