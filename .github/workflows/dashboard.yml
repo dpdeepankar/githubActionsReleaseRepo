@@ -30,8 +30,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}  # Or use a secret PAT: ${{ secrets.MY_PAT }}
           OWNER: ${{ github.repository_owner }}
-          REPO_B: githubActionsReleaseRepo  # Hardcode or use vars
-          RELEASE_WORKFLOW_NAME: app-release.yml
+          # REPO_B: githubActionsReleaseRepo  # Hardcode or use vars
+          # RELEASE_WORKFLOW_NAME: app-release.yml
         run: node generate.js
 
       - name: Setup Pages
