@@ -9,14 +9,16 @@ const octokit = new Octokit({ auth: config.token });
 const MAX_RUNS_PER_WORKFLOW = 15;
 const CACHE_FILE = path.join(__dirname, '.workflow-cache.json');
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
-const CONCURRENT_REQUESTS = 50;
+const CONCURRENT_WORKFLOWS = 10;
+const CONCURRENT_JOBS = 20;
 
 // ──────────────────────────────────────────────
-// UTILITY: Batch processing with concurrency limit
-async function batchProcess(items, processor, concurrency = CONCURRENT_REQUESTS) {
+// UTILITY: Optimized batch processing with better error handling
+async function batchProcess(items, processor, concurrency) {
   const results = [];
   for (let i = 0; i < items.length; i += concurrency) {
     const batch = items.slice(i, i + concurrency);
+    console.log(`Processing batch ${Math.floor(i/concurrency) + 1}/${Math.ceil(items.length/concurrency)}...`);
     const batchResults = await Promise.allSettled(batch.map(processor));
     results.push(...batchResults);
   }
@@ -33,6 +35,7 @@ function loadCache() {
         console.log('✓ Using cached data (fresh)');
         return cache.data;
       }
+      console.log('⚠ Cache expired');
     }
   } catch (err) {
     console.warn('Cache read failed:', err.message);
@@ -53,8 +56,7 @@ function saveCache(data) {
 }
 
 // ──────────────────────────────────────────────
-// (keeping your existing extractVersion, extractArtifactVersion, extractSourceCommit, formatDuration)
-
+// Helper functions
 function extractVersion(run, app) {
   const commitMsg = run.display_title || run.head_commit?.message || '';
   const versionMatch = commitMsg.match(/v?(\d+\.\d+\.\d+(?:-[\w.]+)?)/i);
@@ -96,7 +98,7 @@ function formatDuration(createdAt, updatedAt) {
 }
 
 // ──────────────────────────────────────────────
-// Fetch single workflow run details
+// OPTIMIZED: Fetch single workflow run details with parallel job fetching
 async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease = false) {
   try {
     const { data: runs } = await octokit.actions.listWorkflowRuns({
@@ -107,24 +109,29 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
       page: 1,
     });
 
-    const results = [];
+    if (!runs.workflow_runs?.length) {
+      console.log(`No runs found for ${appName}`);
+      return [];
+    }
 
-    const jobPromises = runs.workflow_runs.map(async (run) => {
+    const jobPromises = runs.workflow_runs.map(run => async () => {
       try {
         const { data: jobsData } = await octokit.actions.listJobsForWorkflowRun({
           owner,
           repo,
           run_id: run.id,
-          per_page: 50,
+          per_page: 100,
         });
 
         const jobs = jobsData.jobs.map(job => ({
+          id: job.id,
           name: job.name,
           conclusion: job.conclusion || job.status,
           status: job.status,
           startedAt: job.started_at,
           completedAt: job.completed_at,
           duration: formatDuration(job.started_at, job.completed_at),
+          htmlUrl: job.html_url,
           steps: job.steps?.map(step => ({
             name: step.name,
             status: step.status,
@@ -156,7 +163,7 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
           attempt: run.run_attempt || 1
         };
       } catch (jobErr) {
-        console.warn(`Jobs fetch failed for run ${run.id}:`, jobErr.message);
+        console.warn(`⚠ Jobs fetch failed for run ${run.id}:`, jobErr.message);
         return {
           appName,
           type: isRelease ? 'Release' : 'Build',
@@ -179,10 +186,11 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
       }
     });
 
-    results.push(...await Promise.all(jobPromises));
-    return results;
+    const results = await batchProcess(jobPromises, fn => fn(), CONCURRENT_JOBS);
+    return results.filter(r => r.status === 'fulfilled').map(r => r.value);
+
   } catch (error) {
-    console.error(`Workflow fetch error for ${appName}:`, error.message);
+    console.error(`⚠ Workflow fetch error for ${appName}:`, error.message);
     return [{
       appName,
       type: isRelease ? 'Release' : 'Build',
@@ -206,41 +214,54 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
 }
 
 // ──────────────────────────────────────────────
-// Fetch functions (unchanged except naming clarity)
+// OPTIMIZED: Fetch build data with better progress tracking
 async function fetchBuildData() {
-  console.log('⏳ Fetching builds...');
+  console.log(`⏳ Fetching builds for ${config.appRepos.length} workflows...`);
   const start = Date.now();
+  
   const tasks = config.appRepos.map(app =>
     () => fetchWorkflowDetails(config.owner, app.repo, app.buildWorkflow, app.name, false)
   );
-  const results = await batchProcess(tasks, t => t());
+  
+  const results = await batchProcess(tasks, t => t(), CONCURRENT_WORKFLOWS);
+  
   const builds = results
     .filter(r => r.status === 'fulfilled')
     .flatMap(r => r.value)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  console.log(`✓ ${builds.length} builds in ${Date.now() - start}ms`);
+  
+  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+  console.log(`✓ Fetched ${builds.length} builds in ${elapsed}s`);
   return builds;
 }
 
+// ──────────────────────────────────────────────
+// OPTIMIZED: Fetch release data
 async function fetchReleaseData() {
   if (!config.releaseRepos?.length) return [];
-  console.log('⏳ Fetching releases...');
+  
+  console.log(`⏳ Fetching releases for ${config.releaseRepos.length} workflows...`);
   const start = Date.now();
+  
   const tasks = config.releaseRepos.map(entry =>
     () => fetchWorkflowDetails(config.owner, entry.repo, entry.releaseWorkflow, entry.appName, true)
   );
-  const results = await batchProcess(tasks, t => t());
+  
+  const results = await batchProcess(tasks, t => t(), CONCURRENT_WORKFLOWS);
+  
   const releases = results
     .filter(r => r.status === 'fulfilled')
     .flatMap(r => r.value)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  console.log(`✓ ${releases.length} releases in ${Date.now() - start}ms`);
+  
+  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+  console.log(`✓ Fetched ${releases.length} releases in ${elapsed}s`);
   return releases;
 }
 
 // ──────────────────────────────────────────────
-// Render step statuses (small pills)
-function renderStepStatuses(steps) {
+// ENHANCED: Render step statuses with clickable links to logs
+function renderStepStatuses(steps, jobUrl) {
   if (!steps?.length) return '<div style="color:#9ca3af; font-size:0.8rem; padding:4px;">No steps available</div>';
 
   return steps.map(step => {
@@ -254,50 +275,73 @@ function renderStepStatuses(steps) {
     } else if (step.conclusion === 'skipped') {
       color = '#9ca3af'; symbol = '⊘'; bg = '#f3f4f6';
     }
+    
+    const stepAnchor = `${jobUrl}#step:${step.number}:1`;
+    const isClickable = step.conclusion === 'failure' || step.status === 'in_progress';
+    
     return `
       <div style="display:flex; align-items:center; padding:4px 8px; margin:3px 0; background:${bg}; border-radius:6px; font-size:0.8rem; border:1px solid #e5e7eb;">
         <span style="color:${color}; font-weight:bold; margin-right:6px;">${symbol}</span>
-        <span>${step.number}. ${step.name}</span>
+        ${isClickable ? 
+          `<a href="${stepAnchor}" target="_blank" rel="noopener noreferrer" style="color:inherit; text-decoration:none; flex:1; display:flex; align-items:center;" title="View logs for this step">
+            <span style="flex:1;">${step.number}. ${step.name}</span>
+            <span style="margin-left:8px; font-size:0.7rem; opacity:0.6;">🔗</span>
+          </a>` :
+          `<span>${step.number}. ${step.name}</span>`
+        }
       </div>
     `;
   }).join('');
 }
 
 // ──────────────────────────────────────────────
-// Horizontal job badges + click to show steps popup
+// ENHANCED: Job badges with links and better visual hierarchy
 function renderJobStatuses(jobs) {
   if (!jobs?.length) return '<div style="color:#9ca3af; padding:8px;">No jobs</div>';
 
   return `
     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:4px;">
       ${jobs.map((job, idx) => {
-        let color = '#6b7280', symbol = '○', bg = '#f3f4f6';
+        let color = '#6b7280', symbol = '○', bg = '#f3f4f6', borderColor = '#d1d5db';
         if (job.status === 'in_progress' || job.status === 'queued') {
-          color = '#eab308'; symbol = '⟳'; bg = '#fef3c7';
+          color = '#eab308'; symbol = '⟳'; bg = '#fef3c7'; borderColor = '#f59e0b';
         } else if (job.conclusion === 'success') {
-          color = '#22c55e'; symbol = '✓'; bg = '#dcfce7';
+          color = '#22c55e'; symbol = '✓'; bg = '#dcfce7'; borderColor = '#22c55e';
         } else if (job.conclusion === 'failure' || job.conclusion === 'cancelled') {
-          color = '#ef4444'; symbol = '✗'; bg = '#fee2e2';
+          color = '#ef4444'; symbol = '✗'; bg = '#fee2e2'; borderColor = '#ef4444';
         }
 
         const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         const stepCount = job.steps?.length || 0;
+        const hasFailedSteps = job.steps?.some(s => s.conclusion === 'failure');
 
         return `
           <div style="position:relative;">
             <div onclick="toggleSteps('${jobId}')"
-                 title="${job.name} • ${job.duration || 'N/A'} • ${stepCount} steps"
-                 style="cursor:pointer; padding:5px 10px; background:${bg}; border-radius:6px; border:1px solid #d1d5db; display:flex; align-items:center; gap:6px; font-size:0.82rem; white-space:nowrap;">
+                 title="${job.name} • ${job.duration || 'N/A'} • ${stepCount} steps • Click to expand"
+                 style="cursor:pointer; padding:5px 10px; background:${bg}; border-radius:6px; border:2px solid ${borderColor}; display:flex; align-items:center; gap:6px; font-size:0.82rem; white-space:nowrap; transition: all 0.2s;">
               <span style="color:${color}; font-weight:bold;">${symbol}</span>
               <span style="font-weight:500;">${job.name}</span>
               ${stepCount ? `<small style="color:#6b7280;">(${stepCount})</small>` : ''}
+              ${hasFailedSteps ? `<span style="color:#ef4444; font-size:0.7rem;">⚠</span>` : ''}
             </div>
-            <div id="${jobId}" style="display:none; position:absolute; z-index:20; background:white; border:1px solid #cbd5e1; border-radius:8px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.25); min-width:340px; max-width:520px; margin-top:8px; padding:12px; max-height:380px; overflow-y:auto;">
-              <div style="font-weight:600; margin-bottom:8px; color:#1f2937; font-size:0.95rem;">${job.name}</div>
-              <div style="font-size:0.82rem; color:#4b5563; margin-bottom:10px;">
-                ${job.duration || 'N/A'} • ${job.status}${job.conclusion ? ` → ${job.conclusion}` : ''}
+            <div id="${jobId}" style="display:none; position:absolute; z-index:20; background:white; border:2px solid ${borderColor}; border-radius:8px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.25); min-width:380px; max-width:580px; margin-top:8px; padding:12px; max-height:420px; overflow-y:auto; left:0;">
+              <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:10px;">
+                <div style="flex:1;">
+                  <div style="font-weight:600; margin-bottom:4px; color:#1f2937; font-size:0.95rem;">${job.name}</div>
+                  <div style="font-size:0.82rem; color:#4b5563;">
+                    ${job.duration || 'N/A'} • ${job.status}${job.conclusion ? ` → ${job.conclusion}` : ''}
+                  </div>
+                </div>
+                <a href="${job.htmlUrl}" target="_blank" rel="noopener noreferrer" 
+                   style="background:#3b82f6; color:white; padding:6px 12px; border-radius:6px; font-size:0.8rem; text-decoration:none; white-space:nowrap; margin-left:8px;"
+                   title="View full job logs on GitHub">
+                  View Logs →
+                </a>
               </div>
-              ${renderStepStatuses(job.steps)}
+              <div style="border-top:1px solid #e5e7eb; padding-top:10px;">
+                ${renderStepStatuses(job.steps, job.htmlUrl)}
+              </div>
             </div>
           </div>
         `;
@@ -307,8 +351,7 @@ function renderJobStatuses(jobs) {
 }
 
 // ──────────────────────────────────────────────
-// (keeping generateMetrics mostly unchanged)
-
+// Metrics calculation
 function generateMetrics(builds, releases) {
   const all = [...builds, ...releases];
   const last24h = all.filter(i => new Date(i.createdAt) > new Date(Date.now() - 86400000));
@@ -329,12 +372,15 @@ function generateMetrics(builds, releases) {
 }
 
 // ──────────────────────────────────────────────
-// Updated HTML generation
+// HTML generation with horizontal scroll and fixed status filter
 function generateHTML(builds, releases) {
   const metrics = generateMetrics(builds, releases);
 
   const allApps = [...new Set([...builds, ...releases].map(i => i.appName))].sort();
   const allBranches = [...new Set([...builds, ...releases].map(i => i.branch).filter(b => b && b !== 'N/A'))].sort();
+  
+  // Extract all unique statuses from actual data
+  const allStatuses = [...new Set([...builds, ...releases].map(i => i.conclusion || i.status))].sort();
 
   const metricsHTML = `
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin:2rem 0;">
@@ -357,12 +403,29 @@ function generateHTML(builds, releases) {
     </div>
   `;
 
-  const buildRows = builds.map(b => `
-    <tr data-app="${b.appName}" data-branch="${b.branch}" data-status="${b.conclusion || b.status}">
+  // Helper function to determine the display status
+  const getDisplayStatus = (item) => {
+    const conclusion = item.conclusion || item.status;
+    const hasFailedJobs = item.jobs?.some(job => 
+      job.conclusion === 'failure' || job.conclusion === 'failed'
+    );
+    
+    // If any job failed, show as failed regardless of overall status
+    if (hasFailedJobs) {
+      return 'failure';
+    }
+    
+    return conclusion;
+  };
+
+  const buildRows = builds.map(b => {
+    const displayStatus = getDisplayStatus(b);
+    return `
+    <tr data-app="${b.appName}" data-branch="${b.branch}" data-status="${displayStatus}">
       <td><strong>${b.appName}</strong></td>
       <td><code style="background:#f3f4f6;padding:2px 5px;border-radius:4px;">${b.version}</code></td>
       <td>${b.branch}</td>
-      <td><span class="status-badge" data-status="${b.conclusion || b.status}">${b.status}</span></td>
+      <td><span class="status-badge" data-status="${displayStatus}">${displayStatus === 'failure' ? 'failed' : b.status}</span></td>
       <td>${b.duration}</td>
       <td title="${b.commitMessage?.replace(/"/g,'&quot;')}"><code>${b.commitSha}</code></td>
       <td>${b.triggeredBy}</td>
@@ -370,14 +433,17 @@ function generateHTML(builds, releases) {
       <td><a href="${b.link}" target="_blank" style="color:#3b82f6;">#${b.runNumber}</a></td>
       <td style="min-width:280px; max-width:500px;">${renderJobStatuses(b.jobs)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
-  const releaseRows = releases.map(r => `
-    <tr data-app="${r.appName}" data-branch="${r.branch}" data-status="${r.conclusion || r.status}">
+  const releaseRows = releases.map(r => {
+    const displayStatus = getDisplayStatus(r);
+    return `
+    <tr data-app="${r.appName}" data-branch="${r.branch}" data-status="${displayStatus}">
       <td><strong>${r.appName}</strong></td>
       <td><code style="background:#f3f4f6;padding:2px 5px;border-radius:4px;">${r.version}</code></td>
       <td>${r.branch}</td>
-      <td><span class="status-badge" data-status="${r.conclusion || r.status}">${r.status}</span></td>
+      <td><span class="status-badge" data-status="${displayStatus}">${displayStatus === 'failure' ? 'failed' : r.status}</span></td>
       <td>${r.duration}</td>
       <td title="${r.commitMessage?.replace(/"/g,'&quot;')}"><code>${r.commitSha}</code></td>
       <td>${r.triggeredBy}</td>
@@ -385,7 +451,20 @@ function generateHTML(builds, releases) {
       <td><a href="${r.link}" target="_blank" style="color:#3b82f6;">#${r.runNumber}</a></td>
       <td style="min-width:280px; max-width:500px;">${renderJobStatuses(r.jobs)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
+
+  // Generate status filter options dynamically
+  const statusOptions = allStatuses.map(status => {
+    let symbol = '';
+    if (status === 'success' || status === 'completed') symbol = '✓ ';
+    else if (status === 'failure' || status === 'failed') symbol = '✗ ';
+    else if (status === 'in_progress') symbol = '⟳ ';
+    else if (status === 'queued' || status === 'waiting') symbol = '○ ';
+    
+    const displayName = status.charAt(0).toUpperCase() + status.slice(1);
+    return `<option value="${status}">${symbol}${displayName}</option>`;
+  }).join('');
 
   return `
 <!DOCTYPE html>
@@ -421,13 +500,24 @@ function generateHTML(builds, releases) {
     }
     h1 { text-align:center; margin-bottom:0.4rem; }
     .subtitle { text-align:center; color:var(--muted); margin-bottom:1.8rem; }
+    
+    /* Horizontal scroll container with sticky positioning */
+    .table-container {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: sticky;
+      top: 0;
+      max-height: calc(100vh - 200px);
+      overflow-y: visible;
+    }
+    
     table {
       width:100%;
+      min-width: 1200px; /* Ensures table has minimum width for horizontal scroll */
       border-collapse:collapse;
       background:white;
-      border-radius:10px;
-      overflow:hidden;
-      box-shadow:0 2px 8px rgba(0,0,0,0.08);
       font-size:0.92rem;
     }
     [data-theme="dark"] table { background:#1e293b; }
@@ -454,6 +544,7 @@ function generateHTML(builds, releases) {
       border-radius:999px;
       font-size:0.78rem;
       font-weight:600;
+      white-space: nowrap;
     }
     a { color:var(--accent); text-decoration:none; }
     a:hover { text-decoration:underline; }
@@ -477,6 +568,7 @@ function generateHTML(builds, releases) {
       padding:2px 5px;
       border-radius:4px;
       font-size:0.86em;
+      white-space: nowrap;
     }
     .filter-bar {
       display:flex;
@@ -514,6 +606,42 @@ function generateHTML(builds, releases) {
       border-color:var(--accent);
     }
     [data-theme="dark"] .view-toggle { background:#1e293b; }
+    
+    /* Scrollbar styling - always visible */
+    .table-container::-webkit-scrollbar {
+      height: 12px;
+    }
+    .table-container::-webkit-scrollbar-track {
+      background: #e5e7eb;
+      border-radius: 10px;
+    }
+    .table-container::-webkit-scrollbar-thumb {
+      background: #9ca3af;
+      border-radius: 10px;
+      border: 2px solid #e5e7eb;
+    }
+    .table-container::-webkit-scrollbar-thumb:hover {
+      background: #6b7280;
+    }
+    [data-theme="dark"] .table-container::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    [data-theme="dark"] .table-container::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-color: #1e293b;
+    }
+    [data-theme="dark"] .table-container::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+    
+    /* Force scrollbar to always show */
+    .table-container {
+      scrollbar-width: auto;
+      scrollbar-color: #9ca3af #e5e7eb;
+    }
+    [data-theme="dark"] .table-container {
+      scrollbar-color: #475569 #1e293b;
+    }
   </style>
 </head>
 <body>
@@ -535,11 +663,7 @@ function generateHTML(builds, releases) {
 
     <select id="filterStatus" onchange="filterTable()">
       <option value="">All Statuses</option>
-      <option value="success">✓ Success</option>
-      <option value="failure">✗ Failed</option>
-      <option value="in_progress">⟳ In Progress</option>
-      <option value="queued">○ Queued</option>
-      <option value="cancelled">Cancelled</option>
+      ${statusOptions}
     </select>
 
     <button onclick="clearFilters()">Clear</button>
@@ -556,43 +680,58 @@ function generateHTML(builds, releases) {
 
   <div id="buildsView">
     <h2>Recent Build Runs</h2>
-    <table id="buildsTable">
-      <thead>
-        <tr>
-          <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
-          <th>Commit</th><th>Triggered By</th><th>Time</th><th>Run</th>
-          <th style="min-width:280px;">Jobs & Steps</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${buildRows || '<tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--muted);">No build runs found</td></tr>'}
-      </tbody>
-    </table>
+    <div class="table-container">
+      <table id="buildsTable">
+        <thead>
+          <tr>
+            <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
+            <th>Commit</th><th>Triggered By</th><th>Time</th><th>Run</th>
+            <th style="min-width:280px;">Jobs & Steps</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${buildRows || '<tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--muted);">No build runs found</td></tr>'}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div id="releasesView" style="display:none;">
     <h2>Recent Release Runs</h2>
-    <table id="releasesTable">
-      <thead>
-        <tr>
-          <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
-          <th>Commit</th><th>Triggered By</th><th>Time</th><th>Run</th>
-          <th style="min-width:280px;">Jobs & Steps</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${releaseRows || '<tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--muted);">No release runs found</td></tr>'}
-      </tbody>
-    </table>
+    <div class="table-container">
+      <table id="releasesTable">
+        <thead>
+          <tr>
+            <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
+            <th>Commit</th><th>Triggered By</th><th>Time</th><th>Run</th>
+            <th style="min-width:280px;">Jobs & Steps</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${releaseRows || '<tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--muted);">No release runs found</td></tr>'}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <button class="dark-toggle" onclick="toggleTheme()">🌙</button>
 
   <script>
     function toggleSteps(id) {
+      document.querySelectorAll('[id^="job-"]').forEach(el => {
+        if (el.id !== id) el.style.display = 'none';
+      });
       const el = document.getElementById(id);
       el.style.display = el.style.display === 'block' ? 'none' : 'block';
     }
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('[id^="job-"]') && !e.target.closest('[onclick^="toggleSteps"]')) {
+        document.querySelectorAll('[id^="job-"]').forEach(el => {
+          el.style.display = 'none';
+        });
+      }
+    });
 
     function showView(view) {
       document.getElementById('buildsView').style.display = view === 'builds' ? 'block' : 'none';
@@ -608,11 +747,11 @@ function generateHTML(builds, releases) {
 
     document.querySelectorAll('.status-badge').forEach(b => {
       const s = b.dataset.status?.toLowerCase() || '';
-      if (s.includes('success') || s === 'completed') {
+      if (s === 'success' || s === 'completed') {
         b.style.background = '#dcfce7'; b.style.color = '#166534';
-      } else if (s.includes('failure') || s === 'cancelled') {
+      } else if (s === 'failure' || s === 'failed' || s === 'cancelled') {
         b.style.background = '#fee2e2'; b.style.color = '#991b1b';
-      } else if (s.includes('in_progress') || s === 'queued') {
+      } else if (s === 'in_progress' || s === 'queued' || s === 'waiting') {
         b.style.background = '#fef3c7'; b.style.color = '#92400e';
       } else {
         b.style.background = '#f3f4f6'; b.style.color = '#4b5563';
@@ -667,7 +806,6 @@ function generateHTML(builds, releases) {
       filterTable();
     }
 
-    // Initial filter
     filterTable();
   </script>
 </body>
@@ -678,13 +816,13 @@ function generateHTML(builds, releases) {
 // ──────────────────────────────────────────────
 // Main
 async function main() {
-  console.log('Starting dashboard generation...');
+  console.log('🚀 Starting dashboard generation...');
   const start = Date.now();
 
   let builds, releases;
   const cached = loadCache();
   if (cached && process.argv.includes('--use-cache')) {
-    console.log('Using cache');
+    console.log('📦 Using cached data');
     ({ builds, releases } = cached);
   } else {
     builds = await fetchBuildData();
@@ -692,13 +830,17 @@ async function main() {
     saveCache({ builds, releases });
   }
 
+  console.log('📝 Generating HTML...');
   const html = generateHTML(builds, releases);
   fs.writeFileSync('index.html', html);
 
-  console.log(`Done in ${(Date.now() - start)/1000}s | Builds: ${builds.length} | Releases: ${releases.length}`);
+  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+  console.log(`✅ Done in ${elapsed}s | Builds: ${builds.length} | Releases: ${releases.length}`);
+  console.log(`📄 Output: index.html`);
 }
 
 main().catch(err => {
-  console.error('Fatal error:', err);
+  console.error('❌ Fatal error:', err);
   process.exit(1);
 });
+  
