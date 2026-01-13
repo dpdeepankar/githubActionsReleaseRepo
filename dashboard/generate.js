@@ -49,6 +49,7 @@ async function fetchBuildData() {
     }
   }
 
+  // Default sort: newest first
   builds.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return builds;
 }
@@ -96,16 +97,16 @@ async function fetchReleaseData() {
 }
 
 function generateHTML(builds, releases) {
-  // Unique values for datalist filters
+  // Unique values for datalist
   const getUnique = (arr, key) => ['', ...new Set(arr.map(item => item[key])).values()].sort();
 
-  const buildApps    = getUnique(builds,    'appName');
-  const buildBranches = getUnique(builds,    'branch');
-  const buildStatuses = getUnique(builds,    'status');
+  const buildApps     = getUnique(builds,    'appName');
+  const buildBranches  = getUnique(builds,    'branch');
+  const buildStatuses  = getUnique(builds,    'status');
 
-  const relApps      = getUnique(releases, 'appName');
-  const relBranches  = getUnique(releases, 'branch');
-  const relStatuses  = getUnique(releases, 'status');
+  const relApps       = getUnique(releases, 'appName');
+  const relBranches   = getUnique(releases, 'branch');
+  const relStatuses   = getUnique(releases, 'status');
 
   return `
 <!DOCTYPE html>
@@ -123,6 +124,7 @@ function generateHTML(builds, releases) {
       --border: #e2e8f0;
       --accent: #3b82f6;
       --accent-dark: #2563eb;
+      --sort-active: #1e40af;
     }
     [data-theme="dark"] {
       --bg: #111827;
@@ -132,6 +134,7 @@ function generateHTML(builds, releases) {
       --border: #374151;
       --accent: #60a5fa;
       --accent-dark: #3b82f6;
+      --sort-active: #93c5fd;
     }
     body {
       margin:0;
@@ -154,10 +157,9 @@ function generateHTML(builds, releases) {
       cursor: pointer;
       background: var(--accent);
       color: white;
-      transition: all 0.2s;
     }
     .tab-btn:hover { background: var(--accent-dark); }
-    .tab-btn.active { background: var(--accent-dark); box-shadow: 0 2px 6px rgba(59,130,246,0.3); }
+    .tab-btn.active { background: var(--accent-dark); }
 
     .tab-content { display:none; background:var(--card); border-radius:0.75rem; border:1px solid var(--border); overflow:hidden; }
     .tab-content.active { display:block; }
@@ -183,7 +185,6 @@ function generateHTML(builds, releases) {
       background:var(--card);
       color:var(--text);
     }
-    [data-theme="dark"] .filter-input { background:#374151; border-color:#4b5563; color:#f3f4f6; }
 
     .clear-btn {
       padding:0.5rem 1.25rem;
@@ -195,9 +196,8 @@ function generateHTML(builds, releases) {
       font-size:0.875rem;
       align-self:flex-end;
     }
-    .clear-btn:hover { background:#dc2626; }
 
-    .table-container { padding:0 1.5rem 1.5rem; }
+    .table-container { padding:0 1.5rem 1.5rem; overflow-x:auto; }
     table { width:100%; border-collapse:collapse; }
     th, td { padding:1rem; text-align:left; border-bottom:1px solid var(--border); }
     th {
@@ -206,9 +206,12 @@ function generateHTML(builds, releases) {
       color:var(--muted);
       text-transform:uppercase;
       font-size:0.875rem;
-      letter-spacing:0.4px;
+      cursor: pointer;
+      user-select: none;
     }
-    [data-theme="dark"] th { background:#1f2937; }
+    th:hover { background: rgba(59,130,246,0.1); }
+    th.sorted-asc::after { content: " ↑"; color: var(--sort-active); }
+    th.sorted-desc::after { content: " ↓"; color: var(--sort-active); }
 
     .status {
       display:inline-block;
@@ -223,13 +226,7 @@ function generateHTML(builds, releases) {
     .status-completed { background:#dcfce7; color:#166534; }
     .status-failure   { background:#fee2e2; color:#991b1b; }
     .status-cancelled { background:#f3f4f6; color:#4b5563; }
-    .status-error     { background:#fee2e2; color:#991b1b; }
-    [data-theme="dark"] .status-queued    { background:#78350f; color:#fde68a; }
-    [data-theme="dark"] .status-in_progress { background:#1e3a8a; color:#93c5fd; }
-    [data-theme="dark"] .status-completed { background:#064e3b; color:#6ee7b7; }
-    [data-theme="dark"] .status-failure   { background:#7f1d1d; color:#fca5a5; }
-    [data-theme="dark"] .status-cancelled { background:#374151; color:#d1d5db; }
-    [data-theme="dark"] .status-error     { background:#7f1d1d; color:#fca5a5; }
+    .status-unknown   { background:#e5e7eb; color:#4b5563; }
 
     .pagination {
       display:flex;
@@ -247,8 +244,8 @@ function generateHTML(builds, releases) {
       border-radius:0.375rem;
       cursor:pointer;
     }
-    .page-btn:hover:not(:disabled) { background:var(--accent); color:white; border-color:var(--accent); }
-    .page-btn.active { background:var(--accent); color:white; border-color:var(--accent); font-weight:600; }
+    .page-btn:hover:not(:disabled) { background:var(--accent); color:white; }
+    .page-btn.active { background:var(--accent); color:white; font-weight:600; }
     .page-btn:disabled { opacity:0.5; cursor:not-allowed; }
 
     .no-results { padding:4rem 1rem; text-align:center; color:var(--muted); font-style:italic; }
@@ -260,12 +257,10 @@ function generateHTML(builds, releases) {
       background:#374151;
       color:white;
       border:none;
-      width:48px;
-      height:48px;
+      width:48px; height:48px;
       border-radius:50%;
       font-size:1.25rem;
       cursor:pointer;
-      box-shadow:0 2px 10px rgba(0,0,0,0.25);
     }
   </style>
 </head>
@@ -288,26 +283,17 @@ function generateHTML(builds, releases) {
       <div class="filter-group">
         <label for="build-app">Application</label>
         <input list="build-apps" id="build-app" class="filter-input" placeholder="Type or select..." autocomplete="off">
-        <datalist id="build-apps">
-          <option value="">All</option>
-          ${buildApps.map(v => `<option value="${v}">${v}</option>`).join('')}
-        </datalist>
+        <datalist id="build-apps"><option value="">All</option>${buildApps.map(v => `<option value="${v}">${v}</option>`).join('')}</datalist>
       </div>
       <div class="filter-group">
         <label for="build-branch">Branch</label>
         <input list="build-branches" id="build-branch" class="filter-input" placeholder="Type or select..." autocomplete="off">
-        <datalist id="build-branches">
-          <option value="">All</option>
-          ${buildBranches.map(v => `<option value="${v}">${v}</option>`).join('')}
-        </datalist>
+        <datalist id="build-branches"><option value="">All</option>${buildBranches.map(v => `<option value="${v}">${v}</option>`).join('')}</datalist>
       </div>
       <div class="filter-group">
         <label for="build-status">Status</label>
         <input list="build-statuses" id="build-status" class="filter-input" placeholder="Type or select..." autocomplete="off">
-        <datalist id="build-statuses">
-          <option value="">All</option>
-          ${buildStatuses.map(v => `<option value="${v}">${v}</option>`).join('')}
-        </datalist>
+        <datalist id="build-statuses"><option value="">All</option>${buildStatuses.map(v => `<option value="${v}">${v}</option>`).join('')}</datalist>
       </div>
       <button class="clear-btn" onclick="clearFilters('build')">Clear</button>
     </div>
@@ -322,26 +308,17 @@ function generateHTML(builds, releases) {
       <div class="filter-group">
         <label for="release-app">Application</label>
         <input list="release-apps" id="release-app" class="filter-input" placeholder="Type or select..." autocomplete="off">
-        <datalist id="release-apps">
-          <option value="">All</option>
-          ${relApps.map(v => `<option value="${v}">${v}</option>`).join('')}
-        </datalist>
+        <datalist id="release-apps"><option value="">All</option>${relApps.map(v => `<option value="${v}">${v}</option>`).join('')}</datalist>
       </div>
       <div class="filter-group">
         <label for="release-branch">Branch</label>
         <input list="release-branches" id="release-branch" class="filter-input" placeholder="Type or select..." autocomplete="off">
-        <datalist id="release-branches">
-          <option value="">All</option>
-          ${relBranches.map(v => `<option value="${v}">${v}</option>`).join('')}
-        </datalist>
+        <datalist id="release-branches"><option value="">All</option>${relBranches.map(v => `<option value="${v}">${v}</option>`).join('')}</datalist>
       </div>
       <div class="filter-group">
         <label for="release-status">Status</label>
         <input list="release-statuses" id="release-status" class="filter-input" placeholder="Type or select..." autocomplete="off">
-        <datalist id="release-statuses">
-          <option value="">All</option>
-          ${relStatuses.map(v => `<option value="${v}">${v}</option>`).join('')}
-        </datalist>
+        <datalist id="release-statuses"><option value="">All</option>${relStatuses.map(v => `<option value="${v}">${v}</option>`).join('')}</datalist>
       </div>
       <button class="clear-btn" onclick="clearFilters('release')">Clear</button>
     </div>
@@ -357,31 +334,39 @@ function generateHTML(builds, releases) {
 const ITEMS_PER_PAGE = 15;
 
 const state = {
-  build:   { data: ${JSON.stringify(builds)},   filtered: [], page: 1 },
-  release: { data: ${JSON.stringify(releases)}, filtered: [], page: 1 }
+  build:   { data: ${JSON.stringify(builds)},   filtered: [], page: 1, sortBy: 'createdAt', sortDir: 'desc' },
+  release: { data: ${JSON.stringify(releases)}, filtered: [], page: 1, sortBy: 'createdAt', sortDir: 'desc' }
 };
 
 function formatTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false
   }).replace(',', '');
 }
 
 function getStatusClass(s) {
   s = (s || '').toLowerCase();
-  if (s.includes('success') || s === 'completed' && !s.includes('fail')) return 'completed';
+  if (s === 'completed' && !s.includes('fail')) return 'completed';
   if (s.includes('fail') || s === 'failure' || s === 'error') return 'failure';
-  if (s === 'in_progress' || s === 'running') return 'in_progress';
+  if (s === 'in_progress') return 'in_progress';
   if (s === 'queued') return 'queued';
   if (s === 'cancelled') return 'cancelled';
   return 'unknown';
+}
+
+function sortData(tab) {
+  const s = state[tab];
+  const dir = s.sortDir === 'asc' ? 1 : -1;
+  s.filtered.sort((a, b) => {
+    if (s.sortBy === 'createdAt') {
+      return dir * (new Date(a.createdAt) - new Date(b.createdAt));
+    }
+    // Add more sort fields here later if needed
+    return 0;
+  });
 }
 
 function renderTable(tab) {
@@ -406,7 +391,7 @@ function renderTable(tab) {
           <th>Application</th>
           <th>Branch</th>
           <th>Status</th>
-          <th>Timestamp</th>
+          <th class="sorted-\${s.sortDir}" onclick="toggleSort('\${tab}', 'createdAt')">Timestamp</th>
           <th>Run Link</th>
         </tr>
       </thead>
@@ -428,7 +413,7 @@ function renderTable(tab) {
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Pagination controls
+  // Pagination
   const totalPages = Math.ceil(s.filtered.length / ITEMS_PER_PAGE);
   let pagHtml = '';
 
@@ -436,19 +421,28 @@ function renderTable(tab) {
     pagHtml += \`<button \${s.page===1?'disabled':''} onclick="changePage('\${tab}', \${s.page-1})">← Prev</button>\`;
 
     for (let i = 1; i <= totalPages; i++) {
-      if (i === s.page) {
-        pagHtml += \`<button class="active">\${i}</button>\`;
-      } else if (i === 1 || i === totalPages || Math.abs(i - s.page) <= 2) {
+      if (i === s.page) pagHtml += \`<button class="active">\${i}</button>\`;
+      else if (i === 1 || i === totalPages || Math.abs(i - s.page) <= 2)
         pagHtml += \`<button onclick="changePage('\${tab}', \${i})">\${i}</button>\`;
-      } else if (Math.abs(i - s.page) === 3) {
-        pagHtml += '<span>...</span>';
-      }
+      else if (Math.abs(i - s.page) === 3) pagHtml += '<span>...</span>';
     }
 
     pagHtml += \`<button \${s.page===totalPages?'disabled':''} onclick="changePage('\${tab}', \${s.page+1})">Next →</button>\`;
   }
 
   pag.innerHTML = pagHtml;
+}
+
+function toggleSort(tab, field) {
+  const s = state[tab];
+  if (s.sortBy === field) {
+    s.sortDir = s.sortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    s.sortBy = field;
+    s.sortDir = 'desc'; // default to newest first
+  }
+  sortData(tab);
+  renderTable(tab);
 }
 
 function changePage(tab, page) {
@@ -471,6 +465,8 @@ function applyFilters(tab) {
            (!stVal  || item.status.toLowerCase().includes(stVal));
   });
 
+  // Re-apply current sort after filtering
+  sortData(tab);
   s.page = 1;
   renderTable(tab);
 }
@@ -503,7 +499,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // Initial render
 applyFilters('build');
-    </script>
+</script>
 </body>
 </html>
   `;
@@ -525,3 +521,4 @@ main().catch(err => {
   console.error(err);
   process.exit(1);
 });
+
