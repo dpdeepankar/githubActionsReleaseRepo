@@ -13,18 +13,27 @@ const CONCURRENT_WORKFLOWS = 10;
 const CONCURRENT_JOBS = 20;
 
 // ──────────────────────────────────────────────
-// NEW: Extract app name and branch from run name
-// Format: branch_name-appname-release or branch_name-appname-build
-function parseRunName(runName) {
-  if (!runName) return { appName: 'Unknown', branch: 'N/A' };
+// NEW: Extract app name and branch from run name (RELEASE workflows only)
+// Format: branch_name-appname-release
+function parseRunName(runName, isRelease = false) {
+  if (!runName || !isRelease) {
+    // For build workflows, return null to use default extraction
+    return null;
+  }
   
-  // Pattern: branch_name-appname-release or branch_name-appname-build
-  // Example: main-myapp-release, develop-api-service-build, feature/new-ui-frontend-release
-  const match = runName.match(/^(.+?)-([^-]+)-(release|build)$/i);
+  // Pattern: branch_name-appname-release
+  // Example: main-myapp-release, develop-api-service-release, feature/new-ui-frontend-release
+  const match = runName.match(/^(.+?)-([^-]+)-release$/i);
   
   if (match) {
-    const branch = match[1].trim();
+    let branch = match[1].trim();
     const appName = match[2].trim();
+    
+    // If branch is "prod", show "main" instead
+    if (branch.toLowerCase() === 'prod') {
+      branch = 'main';
+    }
+    
     return {
       appName: appName,
       branch: branch
@@ -34,11 +43,17 @@ function parseRunName(runName) {
   // Fallback: try to extract at least something meaningful
   const parts = runName.split('-');
   if (parts.length >= 2) {
-    // Last part is likely release/build, second to last is app name, rest is branch
+    // Last part is likely release, second to last is app name, rest is branch
     const lastPart = parts[parts.length - 1].toLowerCase();
-    if (lastPart === 'release' || lastPart === 'build') {
+    if (lastPart === 'release') {
       const appName = parts[parts.length - 2];
-      const branch = parts.slice(0, parts.length - 2).join('-');
+      let branch = parts.slice(0, parts.length - 2).join('-');
+      
+      // If branch is "prod", show "main" instead
+      if (branch.toLowerCase() === 'prod') {
+        branch = 'main';
+      }
+      
       return {
         appName: appName || 'Unknown',
         branch: branch || 'N/A'
@@ -46,11 +61,8 @@ function parseRunName(runName) {
     }
   }
   
-  // Last resort: use the run name as app name
-  return {
-    appName: runName.trim(),
-    branch: 'N/A'
-  };
+  // Last resort: return null to use default extraction
+  return null;
 }
 
 // ──────────────────────────────────────────────
@@ -181,17 +193,19 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
           })) || []
         }));
 
-        // Extract app name and branch from run.name using the format: branch_name-appname-release
-        const { appName, branch } = parseRunName(run.name);
+        // Extract app name and branch from run.name ONLY for release workflows
+        const parsed = parseRunName(run.name, isRelease);
+        const appName = parsed ? parsed.appName : configAppName;
+        const branch = parsed ? parsed.branch : run.head_branch || 'N/A';
         
         const sourceCommit = isRelease ? await extractSourceCommit(owner, repo, run) : run.head_sha?.substring(0, 7) || 'N/A';
         const artifactVersion = isRelease ? extractArtifactVersion(run) : extractVersion(run, appName);
 
         return {
-          appName: appName || configAppName, // Fallback to config name if parsing fails
+          appName: appName,
           type: isRelease ? 'Release' : 'Build',
           version: artifactVersion,
-          branch: branch || run.head_branch || 'N/A', // Fallback to head_branch
+          branch: branch,
           status: run.status || 'unknown',
           conclusion: run.conclusion || run.status,
           createdAt: run.created_at || new Date().toISOString(),
@@ -209,13 +223,15 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
         };
       } catch (jobErr) {
         console.warn(`⚠ Jobs fetch failed for run ${run.id}:`, jobErr.message);
-        const { appName, branch } = parseRunName(run.name);
+        const parsed = parseRunName(run.name, isRelease);
+        const appName = parsed ? parsed.appName : configAppName;
+        const branch = parsed ? parsed.branch : run.head_branch || 'N/A';
         
         return {
-          appName: appName || configAppName,
+          appName: appName,
           type: isRelease ? 'Release' : 'Build',
           version: isRelease ? extractArtifactVersion(run) : extractVersion(run, appName),
-          branch: branch || run.head_branch || 'N/A',
+          branch: branch,
           status: 'error',
           conclusion: 'error',
           createdAt: run.created_at || new Date().toISOString(),
@@ -892,4 +908,3 @@ main().catch(err => {
   console.error('❌ Fatal error:', err);
   process.exit(1);
 });
-
