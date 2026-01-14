@@ -700,10 +700,7 @@ function generateHTML(builds, releases) {
       <td>${r.triggeredBy}</td>
       <td>${new Date(r.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</td>
       <td><a href="${r.link}" target="_blank" style="color:#3b82f6;">#${r.runNumber}</a></td>
-      <td style="min-width:280px; max-width:500px;">
-       ${renderJobStatuses(r.jobs)}
-       // <!-- no ${renderTriggerButton(r)}           <!-- ← new -->
-      </td>
+      <td style="min-width:280px; max-width:500px;">${renderJobStatuses(r.jobs)}</td>
     </tr>
   `;
   }).join('');
