@@ -13,54 +13,127 @@ const CONCURRENT_WORKFLOWS = 10;
 const CONCURRENT_JOBS = 20;
 
 // ──────────────────────────────────────────────
-// NEW: Extract app name and branch from run name (RELEASE workflows only)
-// Format: branch_name-appname-release
+// UPDATED: Extract app name, branch, version, and commit from run name
+// Release format: branchname-appname-release-version-commit
+// Build format: branchname-appname-build-version
 function parseRunName(runName, isRelease = false) {
-  if (!runName || !isRelease) {
-    // For build workflows, return null to use default extraction
+  if (!runName) {
     return null;
   }
-  
-  // Pattern: branch_name-appname-release
-  // Example: main-myapp-release, develop-api-service-release, feature/new-ui-frontend-release
-  const match = runName.match(/^(.+?)-([^-]+)-release$/i);
-  
-  if (match) {
-    let branch = match[1].trim();
-    const appName = match[2].trim();
-    
-    // If branch is "prod", show "main" instead
-    if (branch.toLowerCase() === 'prod') {
-      branch = 'main';
-    }
-    
-    return {
-      appName: appName,
-      branch: branch
-    };
-  }
-  
-  // Fallback: try to extract at least something meaningful
-  const parts = runName.split('-');
-  if (parts.length >= 2) {
-    // Last part is likely release, second to last is app name, rest is branch
-    const lastPart = parts[parts.length - 1].toLowerCase();
-    if (lastPart === 'release') {
-      const appName = parts[parts.length - 2];
-      let branch = parts.slice(0, parts.length - 2).join('-');
-      
+
+  if (isRelease) {
+    // Pattern: branchname-appname-release-version-commit
+    // Example: main-myapp-release-v1.2.3-abc1234
+    //          develop-api-service-release-2.0.0-def5678
+    //          feature/new-ui-frontend-release-1.5.0-ghi9012
+
+    // Match pattern: everything up to -release-, then version, then commit
+    const match = runName.match(/^(.+?)-([^-]+)-release-([^-]+)-([a-f0-9]{7,})$/i);
+
+    if (match) {
+      let branch = match[1].trim();
+      const appName = match[2].trim();
+      const version = match[3].trim();
+      const commit = match[4].trim().substring(0, 7); // Ensure 7 chars
+
       // If branch is "prod", show "main" instead
       if (branch.toLowerCase() === 'prod') {
         branch = 'main';
       }
-      
+
       return {
-        appName: appName || 'Unknown',
-        branch: branch || 'N/A'
+        appName: appName,
+        branch: branch,
+        version: version,
+        commit: commit
       };
     }
+
+    // Fallback: try alternative parsing for release
+    const parts = runName.split('-');
+    if (parts.length >= 5) {
+      // Try to find "release" keyword position
+      const releaseIdx = parts.findIndex(p => p.toLowerCase() === 'release');
+      if (releaseIdx >= 2) {
+        // Branch is everything before app name
+        // App name is the part just before "release"
+        const appName = parts[releaseIdx - 1];
+        let branch = parts.slice(0, releaseIdx - 1).join('-');
+
+        // Version is right after "release"
+        const version = parts[releaseIdx + 1] || 'unknown';
+
+        // Commit is the last part (or second to last if there's trailing data)
+        const commit = parts[parts.length - 1]?.substring(0, 7) || 'N/A';
+
+        // If branch is "prod", show "main" instead
+        if (branch.toLowerCase() === 'prod') {
+          branch = 'main';
+        }
+
+        return {
+          appName: appName || 'Unknown',
+          branch: branch || 'N/A',
+          version: version,
+          commit: commit
+        };
+      }
+    }
+  } else {
+    // Pattern: branchname-appname-build-version
+    // Example: main-myapp-build-v1.2.3
+    //          develop-api-service-build-2.0.0
+    //          feature/new-ui-frontend-build-1.5.0
+
+    // Match pattern: everything up to -build-, then version
+    const match = runName.match(/^(.+?)-([^-]+)-build-(.+)$/i);
+
+    if (match) {
+      let branch = match[1].trim();
+      const appName = match[2].trim();
+      const version = match[3].trim();
+
+      // If branch is "prod", show "main" instead
+      if (branch.toLowerCase() === 'prod') {
+        branch = 'main';
+      }
+
+      return {
+        appName: appName,
+        branch: branch,
+        version: version,
+        commit: null // No commit in build workflow names
+      };
+    }
+
+    // Fallback: try alternative parsing for build
+    const parts = runName.split('-');
+    if (parts.length >= 4) {
+      // Try to find "build" keyword position
+      const buildIdx = parts.findIndex(p => p.toLowerCase() === 'build');
+      if (buildIdx >= 2) {
+        // App name is the part just before "build"
+        const appName = parts[buildIdx - 1];
+        let branch = parts.slice(0, buildIdx - 1).join('-');
+
+        // Version is everything after "build"
+        const version = parts.slice(buildIdx + 1).join('-') || 'unknown';
+
+        // If branch is "prod", show "main" instead
+        if (branch.toLowerCase() === 'prod') {
+          branch = 'main';
+        }
+
+        return {
+          appName: appName || 'Unknown',
+          branch: branch || 'N/A',
+          version: version,
+          commit: null
+        };
+      }
+    }
   }
-  
+
   // Last resort: return null to use default extraction
   return null;
 }
@@ -109,7 +182,7 @@ function saveCache(data) {
 }
 
 // ──────────────────────────────────────────────
-// Helper functions
+// Helper functions for BUILD workflows (fallback extraction)
 function extractVersion(run, app) {
   const commitMsg = run.display_title || run.head_commit?.message || '';
   const versionMatch = commitMsg.match(/v?(\d+\.\d+\.\d+(?:-[\w.]+)?)/i);
@@ -151,7 +224,7 @@ function formatDuration(createdAt, updatedAt) {
 }
 
 // ──────────────────────────────────────────────
-// MODIFIED: Fetch single workflow run details with dynamic app/branch extraction
+// MODIFIED: Fetch single workflow run details with updated parsing logic
 async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRelease = false) {
   try {
     const { data: runs } = await octokit.actions.listWorkflowRuns({
@@ -193,18 +266,19 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
           })) || []
         }));
 
-        // Extract app name and branch from run.name ONLY for release workflows
+        // Parse run name for BOTH release and build workflows to get all fields
         const parsed = parseRunName(run.name, isRelease);
-        const appName = parsed ? parsed.appName : configAppName;
-        const branch = parsed ? parsed.branch : run.head_branch || 'N/A';
-        
-        const sourceCommit = isRelease ? await extractSourceCommit(owner, repo, run) : run.head_sha?.substring(0, 7) || 'N/A';
-        const artifactVersion = isRelease ? extractArtifactVersion(run) : extractVersion(run, appName);
+
+        // Use parsed values if available, otherwise fall back to default extraction
+        const appName = parsed?.appName || configAppName;
+        const branch = parsed?.branch || run.head_branch || 'N/A';
+        const version = parsed?.version || (isRelease ? extractArtifactVersion(run) : extractVersion(run, appName));
+        const commit = parsed?.commit || (isRelease ? await extractSourceCommit(owner, repo, run) : run.head_sha?.substring(0, 7) || 'N/A');
 
         return {
           appName: appName,
           type: isRelease ? 'Release' : 'Build',
-          version: artifactVersion,
+          version: version,
           branch: branch,
           status: run.status || 'unknown',
           conclusion: run.conclusion || run.status,
@@ -214,7 +288,7 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
           triggeredBy: run.triggering_actor?.login || run.actor?.login || 'System',
           event: run.event || 'unknown',
           link: run.html_url,
-          commitSha: sourceCommit,
+          commitSha: commit,
           commitMessage: run.display_title || run.head_commit?.message || 'N/A',
           jobs,
           runNumber: run.run_number || 0,
@@ -224,13 +298,16 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
       } catch (jobErr) {
         console.warn(`⚠ Jobs fetch failed for run ${run.id}:`, jobErr.message);
         const parsed = parseRunName(run.name, isRelease);
-        const appName = parsed ? parsed.appName : configAppName;
-        const branch = parsed ? parsed.branch : run.head_branch || 'N/A';
-        
+
+        const appName = parsed?.appName || configAppName;
+        const branch = parsed?.branch || run.head_branch || 'N/A';
+        const version = parsed?.version || (isRelease ? extractArtifactVersion(run) : extractVersion(run, appName));
+        const commit = parsed?.commit || (isRelease ? await extractSourceCommit(owner, repo, run) : run.head_sha?.substring(0, 7) || 'N/A');
+
         return {
           appName: appName,
           type: isRelease ? 'Release' : 'Build',
-          version: isRelease ? extractArtifactVersion(run) : extractVersion(run, appName),
+          version: version,
           branch: branch,
           status: 'error',
           conclusion: 'error',
@@ -240,7 +317,7 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
           triggeredBy: run.triggering_actor?.login || 'Unknown',
           event: run.event || 'unknown',
           link: run.html_url,
-          commitSha: isRelease ? await extractSourceCommit(owner, repo, run) : run.head_sha?.substring(0, 7) || 'N/A',
+          commitSha: commit,
           commitMessage: run.display_title || 'N/A',
           jobs: [],
           runNumber: run.run_number || 0,
@@ -283,18 +360,18 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
 async function fetchBuildData() {
   console.log(`⏳ Fetching builds for ${config.appRepos.length} workflows...`);
   const start = Date.now();
-  
+
   const tasks = config.appRepos.map(app =>
     () => fetchWorkflowDetails(config.owner, app.repo, app.buildWorkflow, app.name, false)
   );
-  
+
   const results = await batchProcess(tasks, t => t(), CONCURRENT_WORKFLOWS);
-  
+
   const builds = results
     .filter(r => r.status === 'fulfilled')
     .flatMap(r => r.value)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  
+
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
   console.log(`✓ Fetched ${builds.length} builds in ${elapsed}s`);
   return builds;
@@ -304,21 +381,21 @@ async function fetchBuildData() {
 // OPTIMIZED: Fetch release data
 async function fetchReleaseData() {
   if (!config.releaseRepos?.length) return [];
-  
+
   console.log(`⏳ Fetching releases for ${config.releaseRepos.length} workflows...`);
   const start = Date.now();
-  
+
   const tasks = config.releaseRepos.map(entry =>
     () => fetchWorkflowDetails(config.owner, entry.repo, entry.releaseWorkflow, entry.appName, true)
   );
-  
+
   const results = await batchProcess(tasks, t => t(), CONCURRENT_WORKFLOWS);
-  
+
   const releases = results
     .filter(r => r.status === 'fulfilled')
     .flatMap(r => r.value)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  
+
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
   console.log(`✓ Fetched ${releases.length} releases in ${elapsed}s`);
   return releases;
@@ -340,14 +417,14 @@ function renderStepStatuses(steps, jobUrl) {
     } else if (step.conclusion === 'skipped') {
       color = '#9ca3af'; symbol = '⊘'; bg = '#f3f4f6';
     }
-    
+
     const stepAnchor = `${jobUrl}#step:${step.number}:1`;
     const isClickable = step.conclusion === 'failure' || step.status === 'in_progress';
-    
+
     return `
       <div style="display:flex; align-items:center; padding:4px 8px; margin:3px 0; background:${bg}; border-radius:6px; font-size:0.8rem; border:1px solid #e5e7eb;">
         <span style="color:${color}; font-weight:bold; margin-right:6px;">${symbol}</span>
-        ${isClickable ? 
+        ${isClickable ?
           `<a href="${stepAnchor}" target="_blank" rel="noopener noreferrer" style="color:inherit; text-decoration:none; flex:1; display:flex; align-items:center;" title="View logs for this step">
             <span style="flex:1;">${step.number}. ${step.name}</span>
             <span style="margin-left:8px; font-size:0.7rem; opacity:0.6;">🔗</span>
@@ -398,7 +475,7 @@ function renderJobStatuses(jobs) {
                     ${job.duration || 'N/A'} • ${job.status}${job.conclusion ? ` → ${job.conclusion}` : ''}
                   </div>
                 </div>
-                <a href="${job.htmlUrl}" target="_blank" rel="noopener noreferrer" 
+                <a href="${job.htmlUrl}" target="_blank" rel="noopener noreferrer"
                    style="background:#3b82f6; color:white; padding:6px 12px; border-radius:6px; font-size:0.8rem; text-decoration:none; white-space:nowrap; margin-left:8px;"
                    title="View full job logs on GitHub">
                   View Logs →
@@ -443,7 +520,7 @@ function generateHTML(builds, releases) {
 
   const allApps = [...new Set([...builds, ...releases].map(i => i.appName))].sort();
   const allBranches = [...new Set([...builds, ...releases].map(i => i.branch).filter(b => b && b !== 'N/A'))].sort();
-  
+
   // Extract all unique statuses from actual data
   const allStatuses = [...new Set([...builds, ...releases].map(i => i.conclusion || i.status))].sort();
 
@@ -471,15 +548,15 @@ function generateHTML(builds, releases) {
   // Helper function to determine the display status
   const getDisplayStatus = (item) => {
     const conclusion = item.conclusion || item.status;
-    const hasFailedJobs = item.jobs?.some(job => 
+    const hasFailedJobs = item.jobs?.some(job =>
       job.conclusion === 'failure' || job.conclusion === 'failed'
     );
-    
+
     // If any job failed, show as failed regardless of overall status
     if (hasFailedJobs) {
       return 'failure';
     }
-    
+
     return conclusion;
   };
 
@@ -526,7 +603,7 @@ function generateHTML(builds, releases) {
     else if (status === 'failure' || status === 'failed') symbol = '✗ ';
     else if (status === 'in_progress') symbol = '⟳ ';
     else if (status === 'queued' || status === 'waiting') symbol = '○ ';
-    
+
     const displayName = status.charAt(0).toUpperCase() + status.slice(1);
     return `<option value="${status}">${symbol}${displayName}</option>`;
   }).join('');
@@ -565,7 +642,7 @@ function generateHTML(builds, releases) {
     }
     h1 { text-align:center; margin-bottom:0.4rem; }
     .subtitle { text-align:center; color:var(--muted); margin-bottom:1.8rem; }
-    
+
     /* Horizontal scroll container with sticky positioning */
     .table-container {
       overflow-x: auto;
@@ -577,7 +654,7 @@ function generateHTML(builds, releases) {
       max-height: calc(100vh - 200px);
       overflow-y: visible;
     }
-    
+
     table {
       width:100%;
       min-width: 1200px;
@@ -671,7 +748,7 @@ function generateHTML(builds, releases) {
       border-color:var(--accent);
     }
     [data-theme="dark"] .view-toggle { background:#1e293b; }
-    
+
     /* Scrollbar styling - always visible */
     .table-container::-webkit-scrollbar {
       height: 12px;
@@ -698,7 +775,7 @@ function generateHTML(builds, releases) {
     [data-theme="dark"] .table-container::-webkit-scrollbar-thumb:hover {
       background: #64748b;
     }
-    
+
     /* Force scrollbar to always show */
     .table-container {
       scrollbar-width: auto;
