@@ -277,6 +277,7 @@ async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRe
 
         return {
           appName: appName,
+          repo: repo,
           type: isRelease ? 'Release' : 'Build',
           version: version,
           branch: branch,
@@ -493,6 +494,62 @@ function renderJobStatuses(jobs) {
 }
 
 // ──────────────────────────────────────────────
+// NEW: Render trigger build button
+// ──────────────────────────────────────────────
+// Render trigger button ONLY for Build runs
+// ──────────────────────────────────────────────
+// Render trigger button - dynamically lookup workflow filename from config
+function renderTriggerButton(run) {
+  if (run.type !== 'Build') {
+    return ''; // explicitly empty for Releases + anything else
+  }
+
+  // Skip if no repo/branch/workflow info
+  if (!run.repo || !run.branch || !run.appName) {
+    return '<span style="color:#9ca3af; font-size:0.8rem;">Missing info</span>';
+  }
+
+  // 🔑 DYNAMIC LOOKUP: Find exact config entry matching this run's appName
+  const appConfig = config.appRepos.find(entry => entry.name === run.appName);
+  
+  if (!appConfig) {
+    console.warn(`No config found for app: ${run.appName}`);
+    return '<span style="color:#9ca3af; font-size:0.8rem;">Config missing</span>';
+  }
+
+  // Use the ACTUAL workflow filename from config (e.g. 'app1-build.yml')
+  const workflowFilename = appConfig.buildWorkflow; // ← This is perfect! 'app1-build.yml', 'app2-build.yml', etc.
+  const repoName = appConfig.repo; // Double-check repo matches (fallback to run.repo)
+
+  // Direct link to SPECIFIC workflow file (no query params needed)
+  const githubUiUrl = `https://github.com/${config.owner}/${repoName}/actions/workflows/${workflowFilename}`;
+
+  return `
+    <a href="${githubUiUrl}" 
+       target="_blank" rel="noopener noreferrer"
+       title="Trigger '${workflowFilename}' for ${run.appName} (${run.branch}) - opens GitHub Actions workflow page with 'Run workflow' button"
+       style="
+         padding: 6px 12px;
+         font-size: 0.82rem;
+         background: #16a34a;
+         color: white;
+         border: none;
+         border-radius: 6px;
+         text-decoration: none;
+         display: inline-block;
+         font-weight: 500;
+         cursor: pointer;
+         transition: background 0.15s ease;
+       "
+       onmouseover="this.style.background='#15803d'"
+       onmouseout="this.style.background='#16a34a'">
+      ▶ Trigger build
+    </a>
+  `;
+}
+
+
+// ──────────────────────────────────────────────
 // Metrics calculation
 function generateMetrics(builds, releases) {
   const all = [...builds, ...releases];
@@ -511,6 +568,56 @@ function generateMetrics(builds, releases) {
     failedBuilds: builds.filter(b => b.conclusion === 'failure').length,
     failedReleases: releases.filter(r => r.conclusion === 'failure').length
   };
+}
+
+// ──────────────────────────────────────────────
+// NEW: Generate trigger workflows list
+function generateTriggerWorkflowsList() {
+  const buildWorkflows = config.appRepos.map(app => ({
+    name: app.name,
+    repo: app.repo,
+    workflowId: app.buildWorkflow,
+    type: 'Build'
+  }));
+
+  
+
+  const allWorkflows = [...buildWorkflows].sort((a, b) => 
+    a.name.localeCompare(b.name)
+  );
+
+  return allWorkflows.map(wf => {
+    const triggerUrl = `https://github.com/${config.owner}/${wf.repo}/actions/workflows/${wf.workflowId}`;
+    
+    return `
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; margin:8px 0; background:white; border-radius:8px; border:1px solid #e5e7eb; transition:all 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.05);" 
+           onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'; this.style.borderColor='#3b82f6';"
+           onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.05)'; this.style.borderColor='#e5e7eb';">
+        <div style="flex:1;">
+          <div style="font-weight:600; color:#1f2937; margin-bottom:4px; font-size:0.95rem;">
+            ${wf.name}
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="font-size:0.82rem; color:#6b7280;">
+              <span style="font-weight:500;">Type:</span> ${wf.type}
+            </span>
+            <span style="font-size:0.82rem; color:#6b7280;">
+              <span style="font-weight:500;">Repo:</span> ${wf.repo}
+            </span>
+          </div>
+        </div>
+        <a href="${triggerUrl}" 
+           target="_blank" 
+           rel="noopener noreferrer"
+           style="background:#3b82f6; color:white; padding:8px 16px; border-radius:6px; font-size:0.88rem; text-decoration:none; white-space:nowrap; font-weight:500; transition:background 0.2s;"
+           onmouseover="this.style.background='#2563eb';"
+           onmouseout="this.style.background='#3b82f6';"
+           title="Open workflow on GitHub to trigger manually">
+          Trigger Workflow →
+        </a>
+      </div>
+    `;
+  }).join('');
 }
 
 // ──────────────────────────────────────────────
@@ -567,6 +674,7 @@ function generateHTML(builds, releases) {
       <td><strong>${b.appName}</strong></td>
       <td><code style="background:#f3f4f6;padding:2px 5px;border-radius:4px;">${b.version}</code></td>
       <td>${b.branch}</td>
+      <td><code style="background:#f3f4f6;padding:2px 5px;border-radius:4px;">${b.repo}</code></td>
       <td><span class="status-badge" data-status="${displayStatus}">${displayStatus === 'failure' ? 'failed' : b.status}</span></td>
       <td>${b.duration}</td>
       <td title="${b.commitMessage?.replace(/"/g,'&quot;')}"><code>${b.commitSha}</code></td>
@@ -574,6 +682,7 @@ function generateHTML(builds, releases) {
       <td>${new Date(b.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</td>
       <td><a href="${b.link}" target="_blank" style="color:#3b82f6;">#${b.runNumber}</a></td>
       <td style="min-width:280px; max-width:500px;">${renderJobStatuses(b.jobs)}</td>
+      <td style="min-width:280px; max-width:500px;">${renderTriggerButton(b)}  </td>
     </tr>
   `;
   }).join('');
@@ -591,7 +700,10 @@ function generateHTML(builds, releases) {
       <td>${r.triggeredBy}</td>
       <td>${new Date(r.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</td>
       <td><a href="${r.link}" target="_blank" style="color:#3b82f6;">#${r.runNumber}</a></td>
-      <td style="min-width:280px; max-width:500px;">${renderJobStatuses(r.jobs)}</td>
+      <td style="min-width:280px; max-width:500px;">
+       ${renderJobStatuses(r.jobs)}
+       // <!-- no ${renderTriggerButton(r)}           <!-- ← new -->
+      </td>
     </tr>
   `;
   }).join('');
@@ -657,7 +769,7 @@ function generateHTML(builds, releases) {
 
     table {
       width:100%;
-      min-width: 1200px;
+      min-width: 1400px;
       border-collapse:collapse;
       background:white;
       font-size:0.92rem;
@@ -784,6 +896,71 @@ function generateHTML(builds, releases) {
     [data-theme="dark"] .table-container {
       scrollbar-color: #475569 #1e293b;
     }
+
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .modal-content {
+      background: white;
+      margin: 5% auto;
+      padding: 0;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 80vh;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    [data-theme="dark"] .modal-content {
+      background: #1e293b;
+    }
+    .modal-header {
+      padding: 20px 24px;
+      background: #f8f9fc;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    [data-theme="dark"] .modal-header {
+      background: #0f172a;
+    }
+    .modal-header h2 {
+      margin: 0;
+      font-size: 1.4rem;
+      color: var(--text);
+    }
+    .close {
+      font-size: 28px;
+      font-weight: bold;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+    .close:hover {
+      color: var(--text);
+    }
+    .modal-body {
+      padding: 24px;
+      max-height: calc(80vh - 80px);
+      overflow-y: auto;
+    }
+    .workflow-list {
+      margin-top: 12px;
+    }
+    [data-theme="dark"] .workflow-list > div {
+      background: #0f172a !important;
+    }
   </style>
 </head>
 <body>
@@ -811,6 +988,9 @@ function generateHTML(builds, releases) {
     <button onclick="clearFilters()">Clear</button>
 
     <div style="margin-left:auto; display:flex; gap:0.6rem;">
+      <button class="view-toggle" onclick="showTriggerModal()" style="background:#10b981; color:white; border-color:#10b981;">
+        🚀 Trigger Workflows
+      </button>
       <button class="view-toggle active" onclick="showView('builds')" id="btnBuilds">
         Builds (${builds.length})
       </button>
@@ -826,9 +1006,9 @@ function generateHTML(builds, releases) {
       <table id="buildsTable">
         <thead>
           <tr>
-            <th>App</th><th>Version</th><th>Branch</th><th>Status</th><th>Duration</th>
+            <th>App</th><th>Version</th><th>Branch</th><th>Repo</th><th>Status</th><th>Duration</th>
             <th>Commit</th><th>Triggered By</th><th>Time (UTC)</th><th>Run</th>
-            <th style="min-width:280px;">Jobs & Steps</th>
+            <th style="min-width:280px;">Jobs & Steps</th><th>Trigger</th>
           </tr>
         </thead>
         <tbody>
@@ -853,6 +1033,24 @@ function generateHTML(builds, releases) {
           ${releaseRows || '<tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--muted);">No release runs found</td></tr>'}
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Trigger Workflows Modal -->
+  <div id="triggerModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🚀 Trigger Workflows</h2>
+        <span class="close" onclick="closeTriggerModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--muted); margin-bottom:16px;">
+          Click on any workflow below to open it on GitHub, where you can manually trigger it with custom parameters.
+        </p>
+        <div class="workflow-list">
+          ${generateTriggerWorkflowsList()}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -948,13 +1146,35 @@ function generateHTML(builds, releases) {
       filterTable();
     }
 
+    function showTriggerModal() {
+      document.getElementById('triggerModal').style.display = 'block';
+    }
+
+    function closeTriggerModal() {
+      document.getElementById('triggerModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+      const modal = document.getElementById('triggerModal');
+      if (event.target === modal) {
+        closeTriggerModal();
+      }
+    }
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape') {
+        closeTriggerModal();
+      }
+    });
+
     filterTable();
   </script>
 </body>
 </html>
   `;
 }
-
 // ──────────────────────────────────────────────
 // Main
 async function main() {
@@ -985,3 +1205,4 @@ main().catch(err => {
   console.error('❌ Fatal error:', err);
   process.exit(1);
 });
+
