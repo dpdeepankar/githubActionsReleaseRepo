@@ -986,7 +986,7 @@ function generateHTML(builds, releases) {
 
     <div style="margin-left:auto; display:flex; gap:0.6rem;">
       <button class="view-toggle" onclick="showTriggerModal()" style="background:#10b981; color:white; border-color:#10b981;">
-        🚀 Trigger Workflows
+        Trigger Workflows
       </button>
       <button class="view-toggle active" onclick="showView('builds')" id="btnBuilds">
         Builds (${builds.length})
@@ -1037,7 +1037,7 @@ function generateHTML(builds, releases) {
   <div id="triggerModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>🚀 Trigger Workflows</h2>
+        <h2>Trigger Workflows</h2>
         <span class="close" onclick="closeTriggerModal()">&times;</span>
       </div>
       <div class="modal-body">
