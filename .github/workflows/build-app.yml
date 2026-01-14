@@ -58,7 +58,7 @@ jobs:
           repository: dpdeepankar/githubActionsReleaseRepo  # target repo
           event-type: ${{ inputs.appName }}
           client-payload: |
-            ${{ toJSON(fromJSON('{
+            {
               "repository": "${{ github.repository }}",
               "branch": "${{ github.ref_name }}",
               "runId": "${{ github.run_id }}",
@@ -68,4 +68,4 @@ jobs:
               "acaName": "${{ inputs.acaName }}",
               "acaResourceGroup": "${{ inputs.acaResourceGroup }}",
               "commit_short": "$SHORT_SHA"
-            }')) }}
+            }
