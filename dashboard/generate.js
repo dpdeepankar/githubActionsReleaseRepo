@@ -13,6 +13,47 @@ const CONCURRENT_WORKFLOWS = 10;
 const CONCURRENT_JOBS = 20;
 
 // ──────────────────────────────────────────────
+// NEW: Extract app name and branch from run name
+// Format: branch_name-appname-release or branch_name-appname-build
+function parseRunName(runName) {
+  if (!runName) return { appName: 'Unknown', branch: 'N/A' };
+  
+  // Pattern: branch_name-appname-release or branch_name-appname-build
+  // Example: main-myapp-release, develop-api-service-build, feature/new-ui-frontend-release
+  const match = runName.match(/^(.+?)-([^-]+)-(release|build)$/i);
+  
+  if (match) {
+    const branch = match[1].trim();
+    const appName = match[2].trim();
+    return {
+      appName: appName,
+      branch: branch
+    };
+  }
+  
+  // Fallback: try to extract at least something meaningful
+  const parts = runName.split('-');
+  if (parts.length >= 2) {
+    // Last part is likely release/build, second to last is app name, rest is branch
+    const lastPart = parts[parts.length - 1].toLowerCase();
+    if (lastPart === 'release' || lastPart === 'build') {
+      const appName = parts[parts.length - 2];
+      const branch = parts.slice(0, parts.length - 2).join('-');
+      return {
+        appName: appName || 'Unknown',
+        branch: branch || 'N/A'
+      };
+    }
+  }
+  
+  // Last resort: use the run name as app name
+  return {
+    appName: runName.trim(),
+    branch: 'N/A'
+  };
+}
+
+// ──────────────────────────────────────────────
 // UTILITY: Optimized batch processing with better error handling
 async function batchProcess(items, processor, concurrency) {
   const results = [];
@@ -98,8 +139,8 @@ function formatDuration(createdAt, updatedAt) {
 }
 
 // ──────────────────────────────────────────────
-// OPTIMIZED: Fetch single workflow run details with parallel job fetching
-async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease = false) {
+// MODIFIED: Fetch single workflow run details with dynamic app/branch extraction
+async function fetchWorkflowDetails(owner, repo, workflowId, configAppName, isRelease = false) {
   try {
     const { data: runs } = await octokit.actions.listWorkflowRuns({
       owner,
@@ -110,7 +151,7 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
     });
 
     if (!runs.workflow_runs?.length) {
-      console.log(`No runs found for ${appName}`);
+      console.log(`No runs found for workflow ${workflowId}`);
       return [];
     }
 
@@ -140,14 +181,17 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
           })) || []
         }));
 
+        // Extract app name and branch from run.name using the format: branch_name-appname-release
+        const { appName, branch } = parseRunName(run.name);
+        
         const sourceCommit = isRelease ? await extractSourceCommit(owner, repo, run) : run.head_sha?.substring(0, 7) || 'N/A';
         const artifactVersion = isRelease ? extractArtifactVersion(run) : extractVersion(run, appName);
 
         return {
-          appName,
+          appName: appName || configAppName, // Fallback to config name if parsing fails
           type: isRelease ? 'Release' : 'Build',
           version: artifactVersion,
-          branch: run.head_branch || 'N/A',
+          branch: branch || run.head_branch || 'N/A', // Fallback to head_branch
           status: run.status || 'unknown',
           conclusion: run.conclusion || run.status,
           createdAt: run.created_at || new Date().toISOString(),
@@ -160,15 +204,18 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
           commitMessage: run.display_title || run.head_commit?.message || 'N/A',
           jobs,
           runNumber: run.run_number || 0,
-          attempt: run.run_attempt || 1
+          attempt: run.run_attempt || 1,
+          runName: run.name || 'N/A' // Store original run name for reference
         };
       } catch (jobErr) {
         console.warn(`⚠ Jobs fetch failed for run ${run.id}:`, jobErr.message);
+        const { appName, branch } = parseRunName(run.name);
+        
         return {
-          appName,
+          appName: appName || configAppName,
           type: isRelease ? 'Release' : 'Build',
           version: isRelease ? extractArtifactVersion(run) : extractVersion(run, appName),
-          branch: run.head_branch || 'N/A',
+          branch: branch || run.head_branch || 'N/A',
           status: 'error',
           conclusion: 'error',
           createdAt: run.created_at || new Date().toISOString(),
@@ -181,7 +228,8 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
           commitMessage: run.display_title || 'N/A',
           jobs: [],
           runNumber: run.run_number || 0,
-          attempt: run.run_attempt || 1
+          attempt: run.run_attempt || 1,
+          runName: run.name || 'N/A'
         };
       }
     });
@@ -190,9 +238,9 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
     return results.filter(r => r.status === 'fulfilled').map(r => r.value);
 
   } catch (error) {
-    console.error(`⚠ Workflow fetch error for ${appName}:`, error.message);
+    console.error(`⚠ Workflow fetch error for workflow ${workflowId}:`, error.message);
     return [{
-      appName,
+      appName: configAppName,
       type: isRelease ? 'Release' : 'Build',
       version: 'unknown',
       branch: 'N/A',
@@ -208,7 +256,8 @@ async function fetchWorkflowDetails(owner, repo, workflowId, appName, isRelease 
       commitMessage: 'Error fetching data',
       jobs: [],
       runNumber: 0,
-      attempt: 1
+      attempt: 1,
+      runName: 'N/A'
     }];
   }
 }
@@ -515,7 +564,7 @@ function generateHTML(builds, releases) {
     
     table {
       width:100%;
-      min-width: 1200px; /* Ensures table has minimum width for horizontal scroll */
+      min-width: 1200px;
       border-collapse:collapse;
       background:white;
       font-size:0.92rem;
@@ -843,4 +892,4 @@ main().catch(err => {
   console.error('❌ Fatal error:', err);
   process.exit(1);
 });
-  
+
