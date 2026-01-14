@@ -67,5 +67,5 @@ jobs:
               "acrResourceGroup": "${{ inputs.acrResourceGroup }}",
               "acaName": "${{ inputs.acaName }}",
               "acaResourceGroup": "${{ inputs.acaResourceGroup }}",
-              "commit_short": "${GITHUB_SHA:0:7}"
+              "commit_short": "${{ env.SHORT_SHA }}"
             }
