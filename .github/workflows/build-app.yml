@@ -37,6 +37,7 @@ jobs:
 
       - name: build docker image
         run: |
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
           docker build -t ${{ inputs.appName }}:${{ github.run_id }} ${{ inputs.workingDirectory }}
 
       - name: docker save
@@ -57,7 +58,7 @@ jobs:
           repository: dpdeepankar/githubActionsReleaseRepo  # target repo
           event-type: ${{ inputs.appName }}
           client-payload: |
-            {
+            ${{ toJSON(fromJSON('{
               "repository": "${{ github.repository }}",
               "branch": "${{ github.ref_name }}",
               "runId": "${{ github.run_id }}",
@@ -65,5 +66,6 @@ jobs:
               "acrName": "${{ inputs.acrName }}",
               "acrResourceGroup": "${{ inputs.acrResourceGroup }}",
               "acaName": "${{ inputs.acaName }}",
-              "acaResourceGroup": "${{ inputs.acaResourceGroup }}"
-            }
+              "acaResourceGroup": "${{ inputs.acaResourceGroup }}",
+              "commit_short": "$SHORT_SHA"
+            }')) }}
