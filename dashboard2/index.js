@@ -253,7 +253,8 @@ app.post('/api/auth/switch-user', requireAuth, (req, res) => {
 const activeConnections = new Map(); // Map of username -> WebSocket
 
 wss.on('connection', (ws, req) => {
-  console.log('WebSocket client connected');
+  const clientIp = req.socket.remoteAddress;
+  console.log(`WebSocket client connected from ${clientIp} (Total connections: ${wss.clients.size})`);
   
   // Get session from cookie
   const cookies = req.headers.cookie?.split(';').reduce((acc, cookie) => {
@@ -268,7 +269,7 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'auth' && data.username) {
         // Store username with WebSocket connection
         activeConnections.set(data.username, ws);
-        console.log(`WebSocket authenticated for user: ${data.username}`);
+        console.log(`WebSocket authenticated for user: ${data.username} (Active users: ${activeConnections.size})`);
       }
     } catch (err) {
       console.error('WebSocket message error:', err);
@@ -280,7 +281,7 @@ wss.on('connection', (ws, req) => {
     for (const [username, socket] of activeConnections.entries()) {
       if (socket === ws) {
         activeConnections.delete(username);
-        console.log(`WebSocket disconnected for user: ${username}`);
+        console.log(`WebSocket disconnected for user: ${username} (Active users: ${activeConnections.size})`);
         break;
       }
     }
@@ -317,6 +318,12 @@ function startRealtimePolling() {
   if (realtimePolling) return;
   
   realtimePolling = setInterval(async () => {
+    // Only poll if there are active WebSocket connections
+    if (activeConnections.size === 0) {
+      console.log('No active WebSocket connections, skipping real-time poll');
+      return;
+    }
+    
     try {
       const builds = await fetchBuildData();
       const releases = await fetchReleaseData();
@@ -333,15 +340,20 @@ function startRealtimePolling() {
         new Date() - new Date(r.createdAt) < 300000
       );
       
+      // Only broadcast if there are active workflows
       if (activeBuilds.length > 0 || activeReleases.length > 0) {
         broadcastUpdate('workflow_update', { builds: activeBuilds, releases: activeReleases });
       }
     } catch (err) {
       console.error('Real-time polling error:', err);
       if (err.status === 403 && err.message.includes('rate limit')) {
-        console.warn('GitHub rate limit hit → waiting longer before next poll');
-        // Optional: pause polling for 5 min
-        setTimeout(() => {}, 300000);
+        console.warn('GitHub rate limit hit → pausing real-time polling for 5 minutes');
+        // Pause polling for 5 minutes on rate limit
+        clearInterval(realtimePolling);
+        realtimePolling = null;
+        setTimeout(() => {
+          startRealtimePolling();
+        }, 300000);
       }
     }
   }, REAL_TIME_POLL_INTERVAL);
@@ -515,12 +527,40 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
     let builds = await fetchBuildData();
     let releases = await fetchReleaseData();
     
-    if (team && TEAMS_CONFIG[team]) {
+    // Get user's teams from the authenticated user
+    const userTeams = req.user.teams || [];
+    console.log(`User ${req.user.username} teams:`, userTeams);
+    
+    // Filter teams configuration to only include teams the user belongs to
+    const userTeamsConfig = {};
+    userTeams.forEach(teamName => {
+      if (TEAMS_CONFIG[teamName]) {
+        userTeamsConfig[teamName] = TEAMS_CONFIG[teamName];
+      }
+    });
+    
+    // Get all apps from user's teams
+    const userTeamApps = userTeams.reduce((apps, teamName) => {
+      if (TEAMS_CONFIG[teamName] && TEAMS_CONFIG[teamName].apps) {
+        return [...apps, ...TEAMS_CONFIG[teamName].apps];
+      }
+      return apps;
+    }, []);
+    
+    console.log(`User can access apps:`, userTeamApps);
+    
+    // Filter builds and releases to only include apps from user's teams
+    builds = builds.filter(b => userTeamApps.includes(b.appName));
+    releases = releases.filter(r => userTeamApps.includes(r.appName));
+    
+    // Further filter by specific team if requested
+    if (team && userTeamsConfig[team]) {
       const teamApps = TEAMS_CONFIG[team].apps;
       builds = builds.filter(b => teamApps.includes(b.appName));
       releases = releases.filter(r => teamApps.includes(r.appName));
     }
     
+    // Filter by branch if requested
     if (branch) {
       builds = builds.filter(b => b.branch === branch);
       releases = releases.filter(r => r.branch === branch);
@@ -534,7 +574,13 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
       failedRuns: all.filter(i => i.conclusion === 'failure').length
     };
     
-    res.json({ builds, releases, metrics, teams: TEAMS_CONFIG, userPermissions: req.user });
+    res.json({ 
+      builds, 
+      releases, 
+      metrics, 
+      teams: userTeamsConfig,  // Only send teams the user belongs to
+      userPermissions: { ...req.user, owner: config.owner }
+    });
   } catch (err) {
     console.error('Dashboard data error:', err);
     res.status(500).json({ error: 'Failed to fetch dashboard data' });
@@ -655,7 +701,41 @@ app.post('/api/cancel/workflow', requireAuth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+app.post('/api/workflow/approve', requireAuth, checkPermission('approve_release'), async (req, res) => {
+  try {
+    const { repo, runId } = req.body;
+    
+    // Get pending deployments for this workflow run
+    const { data: pendingDeployments } = await octokit.actions.getPendingDeploymentsForRun({
+      owner: config.owner,
+      repo,
+      run_id: runId
+    });
+    
+    if (!pendingDeployments || pendingDeployments.length === 0) {
+      return res.status(404).json({ error: 'No pending deployments found for this workflow run' });
+    }
+    
+    // Approve all pending deployments
+    const environmentIds = pendingDeployments.map(dep => dep.environment.id);
+    
+    await octokit.actions.reviewPendingDeploymentsForRun({
+      owner: config.owner,
+      repo,
+      run_id: runId,
+      environment_ids: environmentIds,
+      state: 'approved',
+      comment: `Approved by ${req.user.username} via CI/CD Dashboard`
+    });
+    
+    console.log(`Approved deployment for run ${runId} by ${req.user.username}`);
+    broadcastUpdate('deployment_approved', { repo, runId, user: req.username });
+    res.json({ success: true, message: 'Deployment approved successfully', environments: pendingDeployments.map(d => d.environment.name) });
+  } catch (err) {
+    console.error('Approve deployment error:', err);
+    res.status(500).json({ error: err.message || 'Failed to approve deployment' });
+  }
+});
 app.get('/api/logs/:repo/:runId', requireAuth, checkPermission('view_logs'), async (req, res) => {
   try {
     const { repo, runId } = req.params;
@@ -805,5 +885,3 @@ process.on('SIGTERM', () => {
     process.exit(0);
   });
 });
-
-
