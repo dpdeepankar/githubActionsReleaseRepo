@@ -107,13 +107,13 @@ module.exports = {
     // ADMINS - Full access to everything
     'john.doe': {
       role: 'admin',
-      teams: ['frontend', 'backend', 'devops', 'data'],  // All teams
+      teams: [ 'frontend','backend', 'devops', 'data'],  // All teams
       password: 'password123'  // Change this in production!
     },
     
     'jane.smith': {
       role: 'admin',
-      teams: ['frontend', 'backend', 'devops', 'data'],
+      teams: ['frontend', 'devops', 'data'],
       password: 'password123'
     },
     
@@ -389,5 +389,3 @@ module.exports = {
 };
 
 */
-
-
