@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enterprise CI/CD Dashboard</title>
+  <style>
+    :root {
+      --bg: #f8f9fc;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e2e8f0;
+      --accent: #3b82f6;
+      --success: #22c55e;
+      --warning: #eab308;
+      --danger: #ef4444;
+      --card-bg: white;
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #334155;
+      --accent: #60a5fa;
+      --card-bg: #1e293b;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    
+    .container {
+      display: grid;
+      grid-template-areas: "sidebar header" "sidebar main";
+      grid-template-columns: 280px 1fr;
+      grid-template-rows: 70px 1fr;
+      height: 100vh;
+    }
+    
+    .sidebar {
+      grid-area: sidebar;
+      background: var(--card-bg);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+    
+    .header {
+      grid-area: header;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .main {
+      grid-area: main;
+      padding: 2rem;
+      overflow-y: auto;
+    }
+    
+    .logo {
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 2rem;
+      color: var(--accent);
+    }
+    
+    .nav-section {
+      margin-bottom: 2rem;
+    }
+    
+    .nav-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      letter-spacing: 0.5px;
+    }
+    
+    .nav-item {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.25rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.95rem;
+    }
+    
+    .nav-item:hover {
+      background: var(--bg);
+    }
+    
+    .nav-item.active {
+      background: var(--accent);
+      color: white;
+    }
+    
+    .badge {
+      margin-left: auto;
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: var(--danger);
+      color: white;
+    }
+    
+    .team-selector {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+    
+    .team-selector select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    
+    .branch-switcher {
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    .branch-btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .branch-btn:hover {
+      border-color: var(--accent);
+    }
+    
+    .branch-btn.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    
+    .realtime-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .user-badge {
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .role-tag {
+      padding: 0.2rem 0.5rem;
+      background: var(--accent);
+      color: white;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+      background: var(--card-bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .metric-value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    
+    .action-bar {
+      background: var(--card-bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .action-controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      filter: brightness(1.1);
+    }
+    
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+    }
+    
+    .table-container {
+      background: var(--card-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    thead {
+      background: var(--bg);
+    }
+    
+    th {
+      padding: 1rem;
+      text-align: left;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    
+    td {
+      padding: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    
+    tbody tr:hover {
+      background: var(--bg);
+    }
+    
+    .status-badge {
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: inline-block;
+    }
+    
+    .status-success {
+      background: #dcfce7;
+      color: #166534;
+    }
+    
+    .status-failure {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .status-in-progress {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    
+    .checkbox-col {
+      width: 40px;
+    }
+    
+    .checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: var(--card-bg);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .modal-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+    
+    .modal-footer {
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 1rem;
+      justify-content: flex-end;
+    }
+    
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    
+    .app-checkbox-item {
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      background: var(--bg);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .logs-viewer {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      max-height: 500px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    
+    .scheduled-job {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .theme-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: none;
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+    
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2000;
+    }
+    
+    .toast {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      min-width: 300px;
+      animation: slideIn 0.3s ease;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    .toast-success { border-left: 4px solid var(--success); }
+    .toast-error { border-left: 4px solid var(--danger); }
+    .toast-info { border-left: 4px solid var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <div class="logo">🚀 CI/CD Hub</div>
+      
+      <div class="team-selector">
+        <label class="form-label" style="margin-bottom: 0.5rem;">Select Team</label>
+        <select id="teamSelect" onchange="switchTeam()">
+          <option value="">All Teams</option>
+        </select>
+      </div>
+      
+      <nav class="nav-section">
+        <div class="nav-title">Views</div>
+        <div class="nav-item active" onclick="showView('overview')">
+          <span>📊</span> Overview
+        </div>
+        <div class="nav-item" onclick="showView('builds')">
+          <span>🔨</span> Builds
+          <span class="badge" id="buildsBadge">0</span>
+        </div>
+        <div class="nav-item" onclick="showView('releases')">
+          <span>🚀</span> Releases
+          <span class="badge" id="releasesBadge">0</span>
+        </div>
+        <div class="nav-item" onclick="showView('scheduled')">
+          <span>⏰</span> Scheduled
+        </div>
+        <div class="nav-item" onclick="showView('pendingApprovals')">
+          <span>✅</span> Pending Approvals
+          <span class="badge" id="pendingBadge">0</span>
+        </div>
+      </nav>
+      
+      <nav class="nav-section">
+        <div class="nav-title">Actions</div>
+        <div class="nav-item" onclick="openModal('bulkBuildModal')">
+          <span>⚡</span> Bulk Build
+        </div>
+        <div class="nav-item" onclick="openModal('bulkReleaseModal')">
+          <span>🎯</span> Bulk Release
+        </div>
+        <div class="nav-item" onclick="openModal('scheduleModal')">
+          <span>📅</span> Schedule Job
+        </div>
+      </nav>
+    </aside>
+    
+    <header class="header">
+      <div class="header-left">
+        <div class="branch-switcher" id="branchSwitcher"></div>
+        <div class="realtime-indicator">
+          <div class="pulse"></div>
+          <span>Real-time Updates</span>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <div class="user-badge" onclick="toggleUserMenu()" style="cursor: pointer; position: relative;">
+          <span>👤</span>
+          <span id="username">User</span>
+          <span class="role-tag" id="userRole">Admin</span>
+          <span style="margin-left: 0.5rem;">▼</span>
+          
+          <!-- User Menu Dropdown -->
+          <div id="userMenu" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.5rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 200px; z-index: 1000;">
+            <div style="padding: 1rem; border-bottom: 1px solid var(--border);">
+              <div style="font-weight: 600; margin-bottom: 0.25rem;" id="menuUsername">User</div>
+              <div style="font-size: 0.8rem; color: var(--muted);" id="menuRole">Role</div>
+            </div>
+            <div id="userSwitcher" style="max-height: 200px; overflow-y: auto;"></div>
+            <div style="padding: 0.5rem; border-top: 1px solid var(--border);">
+              <button onclick="logout()" style="width: 100%; padding: 0.75rem; background: var(--danger); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                🚪 Logout
+              </button>
+            </div>
+          </div>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
+    </header>
+    
+    <main class="main">
+      <div id="overviewView">
+        <h2 style="margin-bottom: 1.5rem;">Dashboard Overview</h2>
+        
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-value" style="color: var(--accent);" id="totalRuns">0</div>
+            <div class="metric-label">Total Runs</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" style="color: var(--success);" id="successRate">0%</div>
+            <div class="metric-label">Success Rate</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" style="color: var(--warning);" id="activeRuns">0</div>
+            <div class="metric-label">Active Runs</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" style="color: var(--danger);" id="failedRuns">0</div>
+            <div class="metric-label">Failed Runs</div>
+          </div>
+        </div>
+        
+        <div class="action-bar">
+          <h3 style="margin-bottom: 1rem;">Quick Actions</h3>
+          <div class="action-controls">
+            <button class="btn btn-primary" onclick="refreshDashboard()">
+              🔄 Refresh
+            </button>
+            <button class="btn btn-success" onclick="openModal('bulkBuildModal')">
+              ⚡ Trigger Builds
+            </button>
+            <button class="btn btn-success" onclick="openModal('bulkReleaseModal')">
+              🚀 Deploy Release
+            </button>
+            <button class="btn btn-secondary" onclick="openModal('scheduleModal')">
+              📅 Schedule
+            </button>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <h3 style="padding: 1.5rem 1.5rem 0.5rem;">Recent Activity</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>App</th>
+                <th>Type</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Triggered By</th>
+                <th>Time</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="recentActivityTable">
+              <tr><td colspan="8" style="text-align: center; padding: 3rem; color: var(--muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div id="buildsView" style="display: none;">
+        <h2 style="margin-bottom: 1.5rem;">Build Pipelines</h2>
+        
+        <div class="action-bar">
+          <div class="action-controls">
+            <button class="btn btn-primary" onclick="selectAllBuilds()">
+              ☑ Select All
+            </button>
+            <button class="btn btn-success" onclick="triggerSelectedBuilds()">
+              ▶ Trigger Selected
+            </button>
+            <button class="btn btn-danger" onclick="cancelSelectedBuilds()">
+              ⏹ Cancel Selected
+            </button>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" class="checkbox" id="selectAllBuildsCheckbox" onchange="toggleAllBuilds()"></th>
+                <th>App</th>
+                <th>Version</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Commit</th>
+                <th>Time</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="buildsTable">
+              <tr><td colspan="9" style="text-align: center; padding: 3rem; color: var(--muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div id="releasesView" style="display: none;">
+        <h2 style="margin-bottom: 1.5rem;">Release Pipelines</h2>
+        
+        <div class="action-bar">
+          <div class="action-controls">
+            <button class="btn btn-primary" onclick="selectAllReleases()">
+              ☑ Select All
+            </button>
+            <button class="btn btn-success" onclick="triggerSelectedReleases()">
+              🚀 Deploy Selected
+            </button>
+            <button class="btn btn-danger" onclick="cancelSelectedReleases()">
+              ⏹ Cancel Selected
+            </button>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" class="checkbox" id="selectAllReleasesCheckbox" onchange="toggleAllReleases()"></th>
+                <th>App</th>
+                <th>Version</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Time</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="releasesTable">
+              <tr><td colspan="8" style="text-align: center; padding: 3rem; color: var(--muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div id="scheduledView" style="display: none;">
+        <h2 style="margin-bottom: 1.5rem;">Scheduled Jobs</h2>
+        <div id="scheduledJobsList"></div>
+      </div>
+      <div id="pendingApprovalsView" style="display: none;">
+        <h2 style="margin-bottom: 1.5rem;">Pending Approvals</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>App</th>
+                <th>Type</th>
+                <th>Branch</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Triggered By</th>
+                <th>Time</th>
+                <th>Approvers</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pendingApprovalsTable">
+              <tr><td colspan="9" style="text-align: center; padding: 3rem; color: var(--muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <div id="bulkBuildModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Bulk Trigger Builds</h3>
+        <button class="close-btn" onclick="closeModal('bulkBuildModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Select Apps</label>
+          <div id="bulkBuildAppsList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('bulkBuildModal')">Cancel</button>
+        <button class="btn btn-success" onclick="executeBulkBuilds()">Trigger Builds</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="bulkReleaseModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Bulk Deploy Releases</h3>
+        <button class="close-btn" onclick="closeModal('bulkReleaseModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Select Apps</label>
+          <div id="bulkReleaseAppsList"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Version (optional)</label>
+          <input type="text" class="form-input" id="releaseVersion" placeholder="e.g., v1.0.0 or 'latest'">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('bulkReleaseModal')">Cancel</button>
+        <button class="btn btn-success" onclick="executeBulkReleases()">Deploy</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="scheduleModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Schedule Workflow</h3>
+        <button class="close-btn" onclick="closeModal('scheduleModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Workflow Type</label>
+          <select class="form-input" id="scheduleType">
+            <option value="build">Build</option>
+            <option value="release">Release</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">App</label>
+          <select class="form-input" id="scheduleApp"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Schedule Time</label>
+          <input type="datetime-local" class="form-input" id="scheduleTime">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('scheduleModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="executeScheduleJob()">Schedule</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="logsModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h3>Workflow Logs</h3>
+        <button class="close-btn" onclick="closeModal('logsModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="logs-viewer" id="logsViewer">Loading logs...</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="toast-container" id="toastContainer"></div>
+  
+  <script>
+    let currentTeam = '';
+    let currentBranch = '';
+    let dashboardData = { builds: [], releases: [], metrics: {}, teams: {} };
+    let ws = null;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      checkAuth();
+      initWebSocket();
+      loadDashboard();
+      loadScheduledJobs();
+      
+      const now = new Date();
+      now.setHours(now.getHours() + 1);
+      document.getElementById('scheduleTime').value = now.toISOString().slice(0, 16);
+      
+      // Close user menu when clicking outside
+      document.addEventListener('click', (e) => {
+        const userMenu = document.getElementById('userMenu');
+        const userBadge = e.target.closest('.user-badge');
+        if (!userBadge && userMenu && userMenu.style.display === 'block') {
+          userMenu.style.display = 'none';
+        }
+      });
+    });
+    
+    async function checkAuth() {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include' // important if using cookies/sessions
+        });
+    
+        if (!response.ok) {
+          // Do NOT reload current page → go to dedicated login page
+          window.location.href = '/login.html';  // ← change this!
+          return;
+        }
+    
+        const data = await response.json();
+        loadUserInfo(data);
+      } catch (err) {
+        window.location.href = '/login.html';
+  }
+}
+    
+    async function loadUserInfo(userData = null) {
+      try {
+        let data = userData;
+        if (!data) {
+          const response = await fetch('/api/auth/me');
+          data = await response.json();
+        }
+        
+        document.getElementById('username').textContent = data.username;
+        document.getElementById('userRole').textContent = data.role.charAt(0).toUpperCase() + data.role.slice(1);
+        document.getElementById('menuUsername').textContent = data.username;
+        document.getElementById('menuRole').textContent = `${data.role} • ${data.teams.join(', ')}`;
+        
+        // Load user switcher (for admins)
+        if (data.role === 'admin') {
+          loadUserSwitcher();
+        }
+      } catch (err) {
+        console.error('Load user info error:', err);
+      }
+    }
+    
+    async function loadUserSwitcher() {
+      try {
+        const response = await fetch('/api/auth/users');
+        const data = await response.json();
+        
+        const html = data.users.map(user => `
+          <div onclick="switchUser('${user.username}')" style="padding: 0.75rem 1rem; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+            <div style="font-weight: 500; margin-bottom: 0.25rem;">${user.username}</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">${user.role} • ${user.teams.join(', ')}</div>
+          </div>
+        `).join('');
+        
+        document.getElementById('userSwitcher').innerHTML = `
+          <div style="padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">
+            Switch User (Admin)
+          </div>
+          ${html}
+        `;
+      } catch (err) {
+        console.error('Failed to load users:', err);
+      }
+    }
+    
+    function toggleUserMenu() {
+      const menu = document.getElementById('userMenu');
+      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    }
+    
+    async function switchUser(username) {
+      try {
+        const response = await fetch('/api/auth/switch-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          loadUserInfo(data.user);
+          document.getElementById('userMenu').style.display = 'none';
+          showToast(`Switched to ${username}`, 'success');
+          loadDashboard(); // Reload dashboard with new user permissions
+        }
+      } catch (err) {
+        showToast('Failed to switch user', 'error');
+      }
+    }
+    
+    async function logout() {
+      try {
+        // Call logout endpoint
+        await fetch('/api/auth/logout', { 
+          method: 'POST',
+          credentials: 'include'  // Important: send cookies/session
+        });
+    
+        // Clear any client-side session data (optional but good)
+        localStorage.clear();   // if you store anything
+        sessionStorage.clear();
+    
+        // Force hard reload to root (bypasses cache)
+        window.location.replace('/');  // ← use .replace() instead of .href
+        // or even better: force reload without cache
+        // window.location.href = '/?logout=' + Date.now();  // cache-busting
+    
+      } catch (err) {
+        console.error('Logout error:', err);
+        // Still redirect even if fetch fails
+        window.location.replace('/');
+      }
+    }
+    function initWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}`);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        showToast('Connected to real-time updates', 'success');
+        
+        // Authenticate WebSocket with current user
+        fetch('/api/auth/me')
+          .then(r => r.json())
+          .then(data => {
+            ws.send(JSON.stringify({ type: 'auth', username: data.username }));
+          });
+      };
+      
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        handleRealtimeUpdate(message);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(initWebSocket, 5000);
+      };
+    }
+    
+    function handleRealtimeUpdate(message) {
+      console.log('Real-time update:', message);
+      
+      switch(message.type) {
+        case 'workflow_update':
+          loadDashboard();
+          showToast('Workflow status updated', 'info');
+          break;
+        case 'workflow_triggered':
+          showToast(`Workflow triggered by ${message.data.user}`, 'success');
+          setTimeout(loadDashboard, 2000);
+          break;
+        case 'bulk_builds_triggered':
+        case 'bulk_releases_triggered':
+          showToast(`Bulk operation completed`, 'success');
+          setTimeout(loadDashboard, 2000);
+          break;
+      }
+    }
+    
+    async function loadDashboard() {
+      try {
+        const params = new URLSearchParams();
+        if (currentTeam) params.append('team', currentTeam);
+        if (currentBranch) params.append('branch', currentBranch);
+        
+        const response = await fetch(`/api/dashboard?${params}`);
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            window.location.href = '/';
+            return;
+          }
+          throw new Error('Failed to load dashboard');
+        }
+        
+        dashboardData = await response.json();
+        renderDashboard();
+        renderBranches();
+        renderTeams();
+      } catch (err) {
+        console.error('Load dashboard error:', err);
+        showToast('Failed to load dashboard', 'error');
+      }
+    }
+    
+    // function loadUserInfo() {
+    //   document.getElementById('username').textContent = 'user1';
+    //   document.getElementById('userRole').textContent = 'Admin';
+    // }
+    
+    async function loadScheduledJobs() {
+      try {
+        const response = await fetch('/api/schedule/list', {
+          headers: { 'X-User': 'user1' }
+        });
+        const data = await response.json();
+        renderScheduledJobs(data.scheduledJobs || []);
+      } catch (err) {
+        console.error('Load scheduled jobs error:', err);
+      }
+    }
+    
+    function renderDashboard() {
+      document.getElementById('totalRuns').textContent = dashboardData.metrics.totalRuns || 0;
+      document.getElementById('successRate').textContent = `${dashboardData.metrics.successRate || 0}%`;
+      document.getElementById('activeRuns').textContent = dashboardData.metrics.activeRuns || 0;
+      document.getElementById('failedRuns').textContent = dashboardData.metrics.failedRuns || 0;
+      document.getElementById('buildsBadge').textContent = dashboardData.builds.filter(b => b.conclusion === 'failure').length;
+      document.getElementById('releasesBadge').textContent = dashboardData.releases.filter(r => r.conclusion === 'failure').length;
+      
+      renderRecentActivity();
+      renderBuildsTable();
+      renderReleasesTable();
+      renderPendingApprovals();
+    }
+    
+function renderPendingApprovals() {
+  const pending = (dashboardData.releases || [])
+    .filter(r =>
+      // ✅ Approval pending ka safest frontend-level signal
+      r.status === 'waiting' &&
+      (
+        r.requiresApproval === true ||          // preferred (backend-added flag)
+        r.environment?.requiresApproval === true || // environment based
+        r.waitingFor === 'approval'              // optional explicit signal
+      )
+    )
+    .map(release => {
+      // 🔍 Find teams owning this app
+      const appTeams = Object.entries(dashboardData.teams || {})
+        .filter(([_, team]) => Array.isArray(team.apps) && team.apps.includes(release.appName))
+        .map(([teamName]) => teamName);
+
+      // 👥 Resolve approvers from roles
+      const approvers = appTeams.flatMap(teamName => {
+        const team = dashboardData.teams?.[teamName];
+        if (!team || !team.permissions?.approve_release) return [];
+
+        return Object.entries(USER_ROLES || {})
+          .filter(([_, user]) =>
+            Array.isArray(user.teams) &&
+            user.teams.includes(teamName) &&
+            team.permissions.approve_release.includes(user.role)
+          )
+          .map(([username]) => username);
+      });
+
+      return {
+        ...release,
+        approvers: [...new Set(approvers)].join(', ') || 'No approvers configured'
+      };
+    });
+
+  const html = pending.map(item => `
+    <tr>
+      <td><strong>${item.appName}</strong></td>
+      <td>${item.type}</td>
+      <td>${item.branch}</td>
+      <td><code>${item.version}</code></td>
+      <td>${getStatusBadge(item.conclusion || item.status)}</td>
+      <td>${item.triggeredBy || '-'}</td>
+      <td>${item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
+      <td>${item.approvers}</td>
+      <td>
+        <button
+          class="btn btn-secondary"
+          style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
+          onclick="viewLogs('${item.repo}', '${item.runId}')">
+          📋 Logs
+        </button>
+        ${
+          item.link
+            ? `<a href="${item.link}" target="_blank"
+                 class="btn btn-secondary"
+                 style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem; text-decoration: none;">
+                 🔗 GitHub
+               </a>`
+            : ''
+        }
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('pendingApprovalsTable').innerHTML =
+    html || '<tr><td colspan="9" style="text-align: center; padding: 2rem;">No pending approvals</td></tr>';
+
+  // 🔔 Badge update
+  document.getElementById('pendingBadge').textContent = pending.length;
+}
+
+    function renderBranches() {
+      const branches = currentTeam && dashboardData.teams[currentTeam] 
+        ? dashboardData.teams[currentTeam].branches 
+        : [];
+      
+      const html = branches.map(branch => 
+        `<button class="branch-btn ${currentBranch === branch ? 'active' : ''}" onclick="switchBranch('${branch}')">${branch}</button>`
+      ).join('');
+      
+      document.getElementById('branchSwitcher').innerHTML = html;
+    }
+    
+    function renderTeams() {
+      const teams = Object.keys(dashboardData.teams || {});
+      const options = ['<option value="">All Teams</option>'].concat(
+        teams.map(team => `<option value="${team}" ${currentTeam === team ? 'selected' : ''}>${dashboardData.teams[team].name}</option>`)
+      );
+      document.getElementById('teamSelect').innerHTML = options.join('');
+      
+      const teamApps = currentTeam && dashboardData.teams[currentTeam] 
+        ? dashboardData.teams[currentTeam].apps 
+        : [...new Set([...dashboardData.builds, ...dashboardData.releases].map(i => i.appName))];
+      
+      renderAppCheckboxes(teamApps);
+    }
+    
+    function renderAppCheckboxes(apps) {
+      const buildHtml = apps.map(app => 
+        `<div class="app-checkbox-item">
+          <input type="checkbox" class="checkbox" value="${app}" id="build-${app}">
+          <label for="build-${app}">${app}</label>
+        </div>`
+      ).join('');
+      document.getElementById('bulkBuildAppsList').innerHTML = buildHtml;
+      
+      const releaseHtml = apps.map(app => 
+        `<div class="app-checkbox-item">
+          <input type="checkbox" class="checkbox" value="${app}" id="release-${app}">
+          <label for="release-${app}">${app}</label>
+        </div>`
+      ).join('');
+      document.getElementById('bulkReleaseAppsList').innerHTML = releaseHtml;
+      
+      const scheduleOptions = apps.map(app => `<option value="${app}">${app}</option>`).join('');
+      document.getElementById('scheduleApp').innerHTML = scheduleOptions;
+    }
+    
+    function renderRecentActivity() {
+      const combined = [...dashboardData.builds, ...dashboardData.releases]
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 10);
+      
+      const html = combined.map(item => `
+        <tr>
+          <td><strong>${item.appName}</strong></td>
+          <td>${item.type}</td>
+          <td>${item.branch}</td>
+          <td>${getStatusBadge(item.conclusion || item.status)}</td>
+          <td>${item.duration}</td>
+          <td>${item.triggeredBy}</td>
+          <td>${new Date(item.createdAt).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="viewLogs('${item.repo}', '${item.runId}')">
+              📋 Logs
+            </button>
+          </td>
+        </tr>
+      `).join('');
+      
+      document.getElementById('recentActivityTable').innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No recent activity</td></tr>';
+    }
+    
+    function renderBuildsTable() {
+      const html = dashboardData.builds.map((build, idx) => `
+        <tr>
+          <td><input type="checkbox" class="checkbox build-checkbox" data-index="${idx}"></td>
+          <td><strong>${build.appName}</strong></td>
+          <td><code>${build.version}</code></td>
+          <td>${build.branch}</td>
+          <td>${getStatusBadge(build.conclusion || build.status)}</td>
+          <td>${build.duration}</td>
+          <td><code>${build.commitSha}</code></td>
+          <td>${new Date(build.createdAt).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="viewLogs('${build.repo}', '${build.runId}')">
+              📋 Logs
+            </button>
+            ${build.link ? `
+          <a href="${build.link}" target="_blank" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem; text-decoration: none;">
+            🔗 GitHub Run
+          </a>
+        ` : ''}
+            ${build.status === 'in_progress' ? 
+              `<button class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem;" onclick="cancelWorkflow('${build.repo}', '${build.runId}')">
+                ⏹ Cancel
+              </button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+      
+      document.getElementById('buildsTable').innerHTML = html || '<tr><td colspan="9" style="text-align: center; padding: 2rem;">No builds found</td></tr>';
+    }
+    
+    function renderReleasesTable() {
+      const html = dashboardData.releases.map((release, idx) => `
+        <tr>
+          <td><input type="checkbox" class="checkbox release-checkbox" data-index="${idx}"></td>
+          <td><strong>${release.appName}</strong></td>
+          <td><code>${release.version}</code></td>
+          <td>${release.branch}</td>
+          <td>${getStatusBadge(release.conclusion || release.status)}</td>
+          <td>${release.duration}</td>
+          <td>${new Date(release.createdAt).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="viewLogs('${release.repo}', '${release.runId}')">
+              📋 Logs
+            </button>
+            ${release.link ? `
+          <a href="${release.link}" target="_blank" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem; text-decoration: none;">
+            🔗 GitHub Run
+          </a>
+        ` : ''}
+            ${release.status === 'waiting' ? 
+              `<button class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem;" onclick="cancelWorkflow('${release.repo}', '${release.runId}')">
+                ⏹ Cancel
+              </button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+      
+      document.getElementById('releasesTable').innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No releases found</td></tr>';
+    }
+    
+    function renderScheduledJobs(jobs) {
+      const html = jobs.map(job => `
+        <div class="scheduled-job">
+          <div>
+            <strong>${job.repo}</strong> - ${job.workflowId}<br>
+            <small style="color: var(--muted);">Scheduled for: ${new Date(job.scheduledTime).toLocaleString()}</small>
+          </div>
+          <button class="btn btn-danger" style="padding: 0.5rem 1rem;" onclick="cancelScheduledJob('${job.id}')">
+            Cancel
+          </button>
+        </div>
+      `).join('');
+      
+      document.getElementById('scheduledJobsList').innerHTML = html || '<p style="color: var(--muted); text-align: center; padding: 2rem;">No scheduled jobs</p>';
+    }
+    
+    function getStatusBadge(status) {
+      const statusMap = {
+        'success': 'status-success',
+        'completed': 'status-success',
+        'failure': 'status-failure',
+        'failed': 'status-failure',
+        'in_progress': 'status-in-progress',
+        'queued': 'status-in-progress'
+      };
+      
+      const className = statusMap[status] || 'status-in-progress';
+      return `<span class="status-badge ${className}">${status}</span>`;
+    }
+    
+    function switchTeam() {
+      currentTeam = document.getElementById('teamSelect').value;
+      currentBranch = '';
+      loadDashboard();
+    }
+    
+    function switchBranch(branch) {
+      currentBranch = currentBranch === branch ? '' : branch;
+      loadDashboard();
+    }
+    
+    function refreshDashboard() {
+      loadDashboard();
+      showToast('Dashboard refreshed', 'success');
+    }
+    
+    function showView(view) {
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      
+      document.getElementById('overviewView').style.display = view === 'overview' ? 'block' : 'none';
+      document.getElementById('buildsView').style.display = view === 'builds' ? 'block' : 'none';
+      document.getElementById('releasesView').style.display = view === 'releases' ? 'block' : 'none';
+      document.getElementById('scheduledView').style.display = view === 'scheduled' ? 'block' : 'none';
+      document.getElementById('pendingApprovalsView').style.display = view === 'pendingApprovals' ? 'block' : 'none';
+      
+      if (view === 'scheduled') {
+        loadScheduledJobs();
+      }
+    }
+    
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.add('active');
+    }
+    
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+    
+    function toggleAllBuilds() {
+      const checked = document.getElementById('selectAllBuildsCheckbox').checked;
+      document.querySelectorAll('.build-checkbox').forEach(cb => cb.checked = checked);
+    }
+    
+    function toggleAllReleases() {
+      const checked = document.getElementById('selectAllReleasesCheckbox').checked;
+      document.querySelectorAll('.release-checkbox').forEach(cb => cb.checked = checked);
+    }
+    
+    function selectAllBuilds() {
+      document.getElementById('selectAllBuildsCheckbox').checked = true;
+      toggleAllBuilds();
+    }
+    
+    function selectAllReleases() {
+      document.getElementById('selectAllReleasesCheckbox').checked = true;
+      toggleAllReleases();
+    }
+    
+    async function executeBulkBuilds() {
+      const selectedApps = Array.from(document.querySelectorAll('#bulkBuildAppsList input:checked'))
+        .map(cb => cb.value);
+      
+      if (selectedApps.length === 0) {
+        showToast('Please select at least one app', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/trigger/bulk-builds', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User': 'user1'
+          },
+          body: JSON.stringify({
+            apps: selectedApps,
+            branch: currentBranch || 'main',
+            team: currentTeam
+          })
+        });
+        
+        const data = await response.json();
+        closeModal('bulkBuildModal');
+        showToast(`Triggered builds for ${selectedApps.length} apps`, 'success');
+        setTimeout(loadDashboard, 2000);
+      } catch (err) {
+        showToast('Failed to trigger builds', 'error');
+      }
+    }
+    
+    async function executeBulkReleases() {
+      const selectedApps = Array.from(document.querySelectorAll('#bulkReleaseAppsList input:checked'))
+        .map(cb => cb.value);
+      const version = document.getElementById('releaseVersion').value || 'latest';
+      
+      if (selectedApps.length === 0) {
+        showToast('Please select at least one app', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/trigger/bulk-releases', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User': 'user1'
+          },
+          body: JSON.stringify({
+            apps: selectedApps,
+            branch: currentBranch || 'main',
+            team: currentTeam,
+            version
+          })
+        });
+        
+        const data = await response.json();
+        closeModal('bulkReleaseModal');
+        showToast(`Triggered releases for ${selectedApps.length} apps`, 'success');
+        setTimeout(loadDashboard, 2000);
+      } catch (err) {
+        showToast('Failed to trigger releases', 'error');
+      }
+    }
+    
+    async function triggerSelectedBuilds() {
+      const selected = Array.from(document.querySelectorAll('.build-checkbox:checked'))
+        .map(cb => dashboardData.builds[cb.dataset.index]);
+      
+      if (selected.length === 0) {
+        showToast('Please select builds to trigger', 'error');
+        return;
+      }
+      
+      const apps = [...new Set(selected.map(b => b.appName))];
+      
+      try {
+        const response = await fetch('/api/trigger/bulk-builds', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User': 'user1'
+          },
+          body: JSON.stringify({
+            apps,
+            branch: currentBranch || 'main',
+            team: currentTeam
+          })
+        });
+        
+        showToast(`Triggered ${apps.length} builds`, 'success');
+        setTimeout(loadDashboard, 2000);
+      } catch (err) {
+        showToast('Failed to trigger builds', 'error');
+      }
+    }
+    
+    async function triggerSelectedReleases() {
+      const selected = Array.from(document.querySelectorAll('.release-checkbox:checked'))
+        .map(cb => dashboardData.releases[cb.dataset.index]);
+      
+      if (selected.length === 0) {
+        showToast('Please select releases to trigger', 'error');
+        return;
+      }
+      
+      const apps = [...new Set(selected.map(r => r.appName))];
+      
+      try {
+        const response = await fetch('/api/trigger/bulk-releases', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User': 'user1'
+          },
+          body: JSON.stringify({
+            apps,
+            branch: currentBranch || 'main',
+            team: currentTeam,
+            version: 'latest'
+          })
+        });
+        
+        showToast(`Triggered ${apps.length} releases`, 'success');
+        setTimeout(loadDashboard, 2000);
+      } catch (err) {
+        showToast('Failed to trigger releases', 'error');
+      }
+    }
+    
+    async function cancelSelectedBuilds() {
+      const selected = Array.from(document.querySelectorAll('.build-checkbox:checked'))
+        .map(cb => dashboardData.builds[cb.dataset.index])
+        .filter(b => b.status === 'in_progress' || b.status === 'queued');
+      
+      if (selected.length === 0) {
+        showToast('No running builds selected', 'error');
+        return;
+      }
+      
+      for (const build of selected) {
+        await cancelWorkflow(build.repo, build.runId);
+      }
+      
+      showToast(`Cancelled ${selected.length} builds`, 'success');
+    }
+    
+    async function cancelSelectedReleases() {
+      const selected = Array.from(document.querySelectorAll('.release-checkbox:checked'))
+        .map(cb => dashboardData.releases[cb.dataset.index])
+        .filter(r => r.status === 'in_progress' || r.status === 'queued');
+      
+      if (selected.length === 0) {
+        showToast('No running releases selected', 'error');
+        return;
+      }
+      
+      for (const release of selected) {
+        await cancelWorkflow(release.repo, release.runId);
+      }
+      
+      showToast(`Cancelled ${selected.length} releases`, 'success');
+    }
+    
+    async function cancelWorkflow(repo, runId) {
+      try {
+        await fetch('/api/cancel/workflow', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User': 'user1'
+          },
+          body: JSON.stringify({ repo, runId })
+        });
+        
+        setTimeout(loadDashboard, 1000);
+      } catch (err) {
+        console.error('Cancel workflow error:', err);
+      }
+    }
+    
+    async function viewLogs(repo, runId) {
+      openModal('logsModal');
+      document.getElementById('logsViewer').textContent = 'Loading logs...';
+      
+      try {
+        const response = await fetch(`/api/logs/${repo}/${runId}`, {
+          headers: { 'X-User': 'user1' }
+        });
+        const data = await response.json();
+        
+        const logsHtml = data.jobs.map(job => 
+          `=== ${job.jobName} ===\n${job.logs || job.error || 'No logs available'}\n\n`
+        ).join('');
+        
+        document.getElementById('logsViewer').textContent = logsHtml;
+      } catch (err) {
+        document.getElementById('logsViewer').textContent = 'Failed to load logs';
+      }
+    }
+    
+    async function executeScheduleJob() {
+      const type = document.getElementById('scheduleType').value;
+      const app = document.getElementById('scheduleApp').value;
+      const scheduledTime = document.getElementById('scheduleTime').value;
+      
+      if (!scheduledTime) {
+        showToast('Please select a schedule time', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/schedule/workflow', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User': 'user1'
+          },
+          body: JSON.stringify({
+            repo: app,
+            workflowId: type === 'build' ? 'build.yml' : 'release.yml',
+            ref: currentBranch || 'main',
+            scheduledTime: new Date(scheduledTime).toISOString()
+          })
+        });
+        
+        const data = await response.json();
+        closeModal('scheduleModal');
+        showToast('Workflow scheduled successfully', 'success');
+        loadScheduledJobs();
+      } catch (err) {
+        showToast('Failed to schedule workflow', 'error');
+      }
+    }
+    
+    async function cancelScheduledJob(jobId) {
+      try {
+        await fetch(`/api/schedule/cancel/${jobId}`, {
+          method: 'POST',
+          headers: { 'X-User': 'user1' }
+        });
+        
+        showToast('Scheduled job cancelled', 'success');
+        loadScheduledJobs();
+      } catch (err) {
+        showToast('Failed to cancel scheduled job', 'error');
+      }
+    }
+    
+    function toggleTheme() {
+      const current = document.documentElement.dataset.theme;
+      document.documentElement.dataset.theme = current === 'dark' ? '' : 'dark';
+      localStorage.setItem('theme', document.documentElement.dataset.theme);
+    }
+    
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.dataset.theme = 'dark';
+    }
+    
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `
+        <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+        <span>${message}</span>
+      `;
+      
+      document.getElementById('toastContainer').appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
+
+
