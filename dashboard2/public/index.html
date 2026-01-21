@@ -525,10 +525,7 @@
       
       <nav class="nav-section">
         <div class="nav-title">Views</div>
-        <div class="nav-item active" onclick="showView('overview')">
-          <span>📊</span> Overview
-        </div>
-        <div class="nav-item" onclick="showView('builds')">
+        <div class="nav-item active" onclick="showView('builds')">
           <span>🔨</span> Builds
           <span class="badge" id="buildsBadge">0</span>
         </div>
@@ -561,7 +558,6 @@
     
     <header class="header">
       <div class="header-left">
-        <div class="branch-switcher" id="branchSwitcher"></div>
         <div class="realtime-indicator">
           <div class="pulse"></div>
           <span>Real-time Updates</span>
@@ -594,70 +590,33 @@
     </header>
     
     <main class="main">
-      <div id="overviewView">
-        <h2 style="margin-bottom: 1.5rem;">Dashboard Overview</h2>
-        
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="metric-value" style="color: var(--accent);" id="totalRuns">0</div>
-            <div class="metric-label">Total Runs</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-value" style="color: var(--success);" id="successRate">0%</div>
-            <div class="metric-label">Success Rate</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-value" style="color: var(--warning);" id="activeRuns">0</div>
-            <div class="metric-label">Active Runs</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-value" style="color: var(--danger);" id="failedRuns">0</div>
-            <div class="metric-label">Failed Runs</div>
-          </div>
-        </div>
-        
-        <div class="action-bar">
-          <h3 style="margin-bottom: 1rem;">Quick Actions</h3>
-          <div class="action-controls">
-            <button class="btn btn-primary" onclick="refreshDashboard()">
-              🔄 Refresh
-            </button>
-            <button class="btn btn-success" onclick="openModal('bulkBuildModal')">
-              ⚡ Trigger Builds
-            </button>
-            <button class="btn btn-success" onclick="openModal('bulkReleaseModal')">
-              🚀 Deploy Release
-            </button>
-            <button class="btn btn-secondary" onclick="openModal('scheduleModal')">
-              📅 Schedule
-            </button>
-          </div>
-        </div>
-        
-        <div class="table-container">
-          <h3 style="padding: 1.5rem 1.5rem 0.5rem;">Recent Activity</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>App</th>
-                <th>Type</th>
-                <th>Branch</th>
-                <th>Status</th>
-                <th>Duration</th>
-                <th>Triggered By</th>
-                <th>Time</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="recentActivityTable">
-              <tr><td colspan="8" style="text-align: center; padding: 3rem; color: var(--muted);">Loading...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
-      <div id="buildsView" style="display: none;">
+      <div id="buildsView">
         <h2 style="margin-bottom: 1.5rem;">Build Pipelines</h2>
+        
+        <div class="action-bar" style="margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+          <div class="form-group" style="margin: 0; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.85rem; margin-bottom: 0.25rem;">Filter by App</label>
+            <select id="buildAppFilter" class="form-input" style="padding: 0.5rem;" onchange="applyBuildFilters()">
+              <option value="">All Apps</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.85rem; margin-bottom: 0.25rem;">Filter by Branch</label>
+            <select id="buildBranchFilter" class="form-input" style="padding: 0.5rem;" onchange="applyBuildFilters()">
+              <option value="">All Branches</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.85rem; margin-bottom: 0.25rem;">Filter by Status</label>
+            <select id="buildStatusFilter" class="form-input" style="padding: 0.5rem;" onchange="applyBuildFilters()">
+              <option value="">All Statuses</option>
+              <option value="success">Success</option>
+              <option value="failure">Failure</option>
+              <option value="in_progress">In Progress</option>
+              <option value="queued">Queued</option>
+            </select>
+          </div>
+        </div>
         
         <div class="action-bar">
           <div class="action-controls">
@@ -685,6 +644,7 @@
                 <th>Duration</th>
                 <th>Commit</th>
                 <th>Time</th>
+                <th style="min-width: 280px;">Jobs & Steps</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -697,6 +657,31 @@
       
       <div id="releasesView" style="display: none;">
         <h2 style="margin-bottom: 1.5rem;">Release Pipelines</h2>
+        
+        <div class="action-bar" style="margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+          <div class="form-group" style="margin: 0; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.85rem; margin-bottom: 0.25rem;">Filter by App</label>
+            <select id="releaseAppFilter" class="form-input" style="padding: 0.5rem;" onchange="applyReleaseFilters()">
+              <option value="">All Apps</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.85rem; margin-bottom: 0.25rem;">Filter by Branch</label>
+            <select id="releaseBranchFilter" class="form-input" style="padding: 0.5rem;" onchange="applyReleaseFilters()">
+              <option value="">All Branches</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.85rem; margin-bottom: 0.25rem;">Filter by Status</label>
+            <select id="releaseStatusFilter" class="form-input" style="padding: 0.5rem;" onchange="applyReleaseFilters()">
+              <option value="">All Statuses</option>
+              <option value="success">Success</option>
+              <option value="failure">Failure</option>
+              <option value="in_progress">In Progress</option>
+              <option value="waiting">Waiting Approval</option>
+            </select>
+          </div>
+        </div>
         
         <div class="action-bar">
           <div class="action-controls">
@@ -723,6 +708,7 @@
                 <th>Status</th>
                 <th>Duration</th>
                 <th>Time</th>
+                <th style="min-width: 280px;">Jobs & Steps</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -764,14 +750,21 @@
   </div>
   
   <div id="bulkBuildModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 700px;">
       <div class="modal-header">
         <h3>Bulk Trigger Builds</h3>
         <button class="close-btn" onclick="closeModal('bulkBuildModal')">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Select Apps</label>
+          <label class="form-label">Common Branch (applies to all selected apps)</label>
+          <select id="bulkBuildBranch" class="form-input" onchange="updateIndividualBranches('build')">
+            <option value="">Select a branch</option>
+          </select>
+          <small style="color: var(--muted); margin-top: 0.25rem; display: block;">Or set individual branches per app below</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Select Apps & Individual Branches (optional)</label>
           <div id="bulkBuildAppsList"></div>
         </div>
       </div>
@@ -783,14 +776,21 @@
   </div>
   
   <div id="bulkReleaseModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 700px;">
       <div class="modal-header">
         <h3>Bulk Deploy Releases</h3>
         <button class="close-btn" onclick="closeModal('bulkReleaseModal')">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Select Apps</label>
+          <label class="form-label">Common Branch (applies to all selected apps)</label>
+          <select id="bulkReleaseBranch" class="form-input" onchange="updateIndividualBranches('release')">
+            <option value="">Select a branch</option>
+          </select>
+          <small style="color: var(--muted); margin-top: 0.25rem; display: block;">Or set individual branches per app below</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Select Apps & Individual Branches (optional)</label>
           <div id="bulkReleaseAppsList"></div>
         </div>
         <div class="form-group">
@@ -854,6 +854,11 @@
     let currentBranch = '';
     let dashboardData = { builds: [], releases: [], metrics: {}, teams: {} };
     let ws = null;
+    let wsReconnectAttempts = 0;
+    let maxReconnectAttempts = 5;
+    let isAuthenticated = false;
+    let wsReconnectTimer = null;
+    let currentUser = null;
     
     document.addEventListener('DOMContentLoaded', () => {
       checkAuth();
@@ -878,19 +883,23 @@
     async function checkAuth() {
       try {
         const response = await fetch('/api/auth/me', {
-          credentials: 'include' // important if using cookies/sessions
+          credentials: 'include'
         });
     
         if (!response.ok) {
-          // Do NOT reload current page → go to dedicated login page
-          window.location.href = '/login.html';  // ← change this!
+          isAuthenticated = false;
+          cleanupWebSocket();
+          window.location.replace('/login.html');
           return;
         }
     
         const data = await response.json();
+        isAuthenticated = true;
         loadUserInfo(data);
       } catch (err) {
-        window.location.href = '/login.html';
+        isAuthenticated = false;
+        cleanupWebSocket();
+        window.location.replace('/login.html');
   }
 }
     
@@ -902,10 +911,18 @@
           data = await response.json();
         }
         
+        currentUser = data; // Store current user globally
+        
         document.getElementById('username').textContent = data.username;
         document.getElementById('userRole').textContent = data.role.charAt(0).toUpperCase() + data.role.slice(1);
         document.getElementById('menuUsername').textContent = data.username;
         document.getElementById('menuRole').textContent = `${data.role} • ${data.teams.join(', ')}`;
+        
+        // Show/hide pending approvals nav item based on role
+        const pendingApprovalsNav = document.querySelector('.nav-item[onclick="showView(\'pendingApprovals\')"]');
+        if (pendingApprovalsNav) {
+          pendingApprovalsNav.style.display = (data.role === 'admin' || data.role === 'lead') ? 'flex' : 'none';
+        }
         
         // Load user switcher (for admins)
         if (data.role === 'admin') {
@@ -966,20 +983,21 @@
     
     async function logout() {
       try {
+        isAuthenticated = false;
+        cleanupWebSocket();
+        
         // Call logout endpoint
         await fetch('/api/auth/logout', { 
           method: 'POST',
-          credentials: 'include'  // Important: send cookies/session
+          credentials: 'include'
         });
     
-        // Clear any client-side session data (optional but good)
-        localStorage.clear();   // if you store anything
+        // Clear any client-side session data
+        localStorage.clear();
         sessionStorage.clear();
     
-        // Force hard reload to root (bypasses cache)
-        window.location.replace('/');  // ← use .replace() instead of .href
-        // or even better: force reload without cache
-        // window.location.href = '/?logout=' + Date.now();  // cache-busting
+        // Force hard reload to root
+        window.location.replace('/');
     
       } catch (err) {
         console.error('Logout error:', err);
@@ -987,19 +1005,50 @@
         window.location.replace('/');
       }
     }
+    function cleanupWebSocket() {
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+      if (ws) {
+        ws.onclose = null; // Prevent reconnection
+        ws.close();
+        ws = null;
+      }
+      wsReconnectAttempts = 0;
+    }
+    
     function initWebSocket() {
+      // Don't reconnect if not authenticated or max attempts reached
+      if (!isAuthenticated || wsReconnectAttempts >= maxReconnectAttempts) {
+        console.log('WebSocket connection skipped - not authenticated or max attempts reached');
+        return;
+      }
+      
+      // Clean up existing connection
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        return; // Already connected
+      }
+      
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       ws = new WebSocket(`${protocol}//${window.location.host}`);
       
       ws.onopen = () => {
         console.log('WebSocket connected');
+        wsReconnectAttempts = 0; // Reset counter on successful connection
         showToast('Connected to real-time updates', 'success');
         
         // Authenticate WebSocket with current user
         fetch('/api/auth/me')
           .then(r => r.json())
           .then(data => {
-            ws.send(JSON.stringify({ type: 'auth', username: data.username }));
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'auth', username: data.username }));
+            }
+          })
+          .catch(err => {
+            console.error('WebSocket auth error:', err);
+            cleanupWebSocket();
           });
       };
       
@@ -1014,7 +1063,17 @@
       
       ws.onclose = () => {
         console.log('WebSocket disconnected');
-        setTimeout(initWebSocket, 5000);
+        ws = null;
+        
+        // Only reconnect if authenticated and haven't exceeded max attempts
+        if (isAuthenticated && wsReconnectAttempts < maxReconnectAttempts) {
+          wsReconnectAttempts++;
+          const delay = Math.min(5000 * wsReconnectAttempts, 30000); // Exponential backoff, max 30s
+          console.log(`Reconnecting WebSocket in ${delay/1000}s (attempt ${wsReconnectAttempts}/${maxReconnectAttempts})`);
+          wsReconnectTimer = setTimeout(initWebSocket, delay);
+        } else {
+          console.log('WebSocket reconnection stopped');
+        }
       };
     }
     
@@ -1023,8 +1082,10 @@
       
       switch(message.type) {
         case 'workflow_update':
-          loadDashboard();
-          showToast('Workflow status updated', 'info');
+          // Only reload if there are actual changes
+          if (message.data && (message.data.builds?.length > 0 || message.data.releases?.length > 0)) {
+            loadDashboard();
+          }
           break;
         case 'workflow_triggered':
           showToast(`Workflow triggered by ${message.data.user}`, 'success');
@@ -1044,23 +1105,37 @@
         if (currentTeam) params.append('team', currentTeam);
         if (currentBranch) params.append('branch', currentBranch);
         
-        const response = await fetch(`/api/dashboard?${params}`);
+        console.log(`Loading dashboard - Team: ${currentTeam || 'All'}, Branch: ${currentBranch || 'All'}`);
+        
+        const response = await fetch(`/api/dashboard?${params}`, {
+          credentials: 'include'
+        });
         
         if (!response.ok) {
           if (response.status === 401) {
-            window.location.href = '/';
+            isAuthenticated = false;
+            cleanupWebSocket();
+            window.location.replace('/login.html');
             return;
           }
-          throw new Error('Failed to load dashboard');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to load dashboard');
         }
         
         dashboardData = await response.json();
+        
+        // Ensure dashboardData has required properties
+        if (!dashboardData.builds) dashboardData.builds = [];
+        if (!dashboardData.releases) dashboardData.releases = [];
+        if (!dashboardData.teams) dashboardData.teams = {};
+        if (!dashboardData.metrics) dashboardData.metrics = {};
+        
         renderDashboard();
         renderBranches();
         renderTeams();
       } catch (err) {
         console.error('Load dashboard error:', err);
-        showToast('Failed to load dashboard', 'error');
+        showToast(err.message || 'Failed to load dashboard', 'error');
       }
     }
     
@@ -1069,10 +1144,56 @@
     //   document.getElementById('userRole').textContent = 'Admin';
     // }
     
+    async function approveRelease(repo, runId, appName) {
+      if (!confirm(`Approve release for ${appName}?\n\nThis will approve the pending deployment and allow it to proceed.`)) {
+        return;
+      }
+      
+      try {
+        // Find which team this app belongs to
+        let appTeam = null;
+        for (const [teamName, teamConfig] of Object.entries(dashboardData.teams || {})) {
+          if (teamConfig.apps && teamConfig.apps.includes(appName)) {
+            appTeam = teamName;
+            break;
+          }
+        }
+        
+        if (!appTeam) {
+          showToast('Cannot determine team for this app', 'error');
+          return;
+        }
+        
+        showToast('Approving deployment...', 'info');
+        
+        const response = await fetch('/api/workflow/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ repo, runId, team: appTeam })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to approve deployment');
+        }
+        
+        const envs = data.environments ? ` (${data.environments.join(', ')})` : '';
+        showToast(`Deployment approved successfully${envs}`, 'success');
+        
+        // Refresh dashboard to update status
+        setTimeout(() => loadDashboard(), 2000);
+      } catch (err) {
+        console.error('Approval error:', err);
+        showToast(err.message || 'Failed to approve deployment', 'error');
+      }
+    }
+    
     async function loadScheduledJobs() {
       try {
         const response = await fetch('/api/schedule/list', {
-          headers: { 'X-User': 'user1' }
+          credentials: 'include'
         });
         const data = await response.json();
         renderScheduledJobs(data.scheduledJobs || []);
@@ -1082,111 +1203,193 @@
     }
     
     function renderDashboard() {
-      document.getElementById('totalRuns').textContent = dashboardData.metrics.totalRuns || 0;
-      document.getElementById('successRate').textContent = `${dashboardData.metrics.successRate || 0}%`;
-      document.getElementById('activeRuns').textContent = dashboardData.metrics.activeRuns || 0;
-      document.getElementById('failedRuns').textContent = dashboardData.metrics.failedRuns || 0;
+      console.log(`Rendering dashboard - Team: ${currentTeam || 'All'}, Builds: ${dashboardData.builds.length}, Releases: ${dashboardData.releases.length}`);
+      console.log('Build apps:', dashboardData.builds.map(b => b.appName).join(', '));
+      console.log('Release apps:', dashboardData.releases.map(r => r.appName).join(', '));
+      
+      // Update badges in navigation
       document.getElementById('buildsBadge').textContent = dashboardData.builds.filter(b => b.conclusion === 'failure').length;
       document.getElementById('releasesBadge').textContent = dashboardData.releases.filter(r => r.conclusion === 'failure').length;
       
-      renderRecentActivity();
+      // Reset filtered data arrays to force fresh rendering
+      filteredBuildsData = [];
+      filteredReleasesData = [];
+      
+      // Ensure builds view is visible after team change
+      const buildsView = document.getElementById('buildsView');
+      if (buildsView && buildsView.style.display === 'none') {
+        const currentView = document.querySelector('.nav-item.active');
+        if (currentView && currentView.textContent.includes('Builds')) {
+          buildsView.style.display = 'block';
+        }
+      }
+      
+      // Render tables with fresh data (no filters applied initially)
       renderBuildsTable();
       renderReleasesTable();
-      renderPendingApprovals();
+      
+      // Only render pending approvals if user has permission
+      if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'lead')) {
+        renderPendingApprovals();
+      }
     }
     
 function renderPendingApprovals() {
-  const pending = (dashboardData.releases || [])
-    .filter(r =>
-      // ✅ Approval pending ka safest frontend-level signal
-      r.status === 'waiting' &&
-      (
-        r.requiresApproval === true ||          // preferred (backend-added flag)
-        r.environment?.requiresApproval === true || // environment based
-        r.waitingFor === 'approval'              // optional explicit signal
-      )
-    )
-    .map(release => {
-      // 🔍 Find teams owning this app
-      const appTeams = Object.entries(dashboardData.teams || {})
-        .filter(([_, team]) => Array.isArray(team.apps) && team.apps.includes(release.appName))
-        .map(([teamName]) => teamName);
+  try {
+    const pending = (dashboardData.releases || [])
+      .filter(r => {
+        // GitHub Actions uses 'waiting' status for runs waiting for approval
+        // Also check for 'action_required' and jobs with 'waiting' status
+        const isWaitingStatus = r.status === 'waiting' || r.status === 'action_required';
+        const hasWaitingJobs = r.jobs?.some(job => job.status === 'waiting' || job.status === 'pending');
+        const isPendingConclusion = r.conclusion === 'action_required' || r.conclusion === 'waiting';
+        
+        return isWaitingStatus || hasWaitingJobs || isPendingConclusion;
+      })
+      .map(release => {
+        // 🔍 Find teams owning this app
+        const appTeams = Object.entries(dashboardData.teams || {})
+          .filter(([_, team]) => Array.isArray(team.apps) && team.apps.includes(release.appName))
+          .map(([teamName]) => teamName);
 
-      // 👥 Resolve approvers from roles
-      const approvers = appTeams.flatMap(teamName => {
-        const team = dashboardData.teams?.[teamName];
-        if (!team || !team.permissions?.approve_release) return [];
+        // 👥 Resolve approvers from roles (if USER_ROLES is available)
+        let approvers = 'Approval Required';
+        if (typeof USER_ROLES !== 'undefined' && appTeams.length > 0) {
+          const approversList = appTeams.flatMap(teamName => {
+            const team = dashboardData.teams?.[teamName];
+            if (!team || !team.permissions?.approve_release) return [];
 
-        return Object.entries(USER_ROLES || {})
-          .filter(([_, user]) =>
-            Array.isArray(user.teams) &&
-            user.teams.includes(teamName) &&
-            team.permissions.approve_release.includes(user.role)
-          )
-          .map(([username]) => username);
+            return Object.entries(USER_ROLES || {})
+              .filter(([_, user]) =>
+                Array.isArray(user.teams) &&
+                user.teams.includes(teamName) &&
+                team.permissions.approve_release.includes(user.role)
+              )
+              .map(([username]) => username);
+          });
+          
+          approvers = [...new Set(approversList)].join(', ') || 'No approvers configured';
+        }
+
+        return {
+          ...release,
+          approvers: approvers
+        };
       });
 
-      return {
-        ...release,
-        approvers: [...new Set(approvers)].join(', ') || 'No approvers configured'
-      };
-    });
+    const html = pending.map(item => `
+      <tr>
+        <td><strong>${item.appName}</strong></td>
+        <td>${item.type}</td>
+        <td>${item.branch}</td>
+        <td><code>${item.version}</code></td>
+        <td>${getStatusBadge(item.conclusion || item.status)}</td>
+        <td>${item.triggeredBy || '-'}</td>
+        <td>${item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
+        <td>${item.approvers}</td>
+        <td>
+          ${
+            currentUser && (currentUser.role === 'admin' || currentUser.role === 'lead')
+              ? `<button
+                   class="btn btn-success"
+                   style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-right: 0.5rem;"
+                   onclick="approveRelease('${item.repo}', '${item.runId}', '${item.appName}')">
+                   ✅ Approve
+                 </button>`
+              : ''
+          }
+          <button
+            class="btn btn-secondary"
+            style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
+            onclick="viewLogs('${item.repo}', '${item.runId}')">
+            📋 Logs
+          </button>
+          ${
+            item.link
+              ? `<a href="${item.link}" target="_blank"
+                   class="btn btn-secondary"
+                   style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem; text-decoration: none;">
+                   🔗 GitHub
+                 </a>`
+              : ''
+          }
+        </td>
+      </tr>
+    `).join('');
 
-  const html = pending.map(item => `
-    <tr>
-      <td><strong>${item.appName}</strong></td>
-      <td>${item.type}</td>
-      <td>${item.branch}</td>
-      <td><code>${item.version}</code></td>
-      <td>${getStatusBadge(item.conclusion || item.status)}</td>
-      <td>${item.triggeredBy || '-'}</td>
-      <td>${item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
-      <td>${item.approvers}</td>
-      <td>
-        <button
-          class="btn btn-secondary"
-          style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
-          onclick="viewLogs('${item.repo}', '${item.runId}')">
-          📋 Logs
-        </button>
-        ${
-          item.link
-            ? `<a href="${item.link}" target="_blank"
-                 class="btn btn-secondary"
-                 style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem; text-decoration: none;">
-                 🔗 GitHub
-               </a>`
-            : ''
-        }
-      </td>
-    </tr>
-  `).join('');
+    document.getElementById('pendingApprovalsTable').innerHTML =
+      html || '<tr><td colspan="9" style="text-align: center; padding: 2rem;">No pending approvals</td></tr>';
 
-  document.getElementById('pendingApprovalsTable').innerHTML =
-    html || '<tr><td colspan="9" style="text-align: center; padding: 2rem;">No pending approvals</td></tr>';
-
-  // 🔔 Badge update
-  document.getElementById('pendingBadge').textContent = pending.length;
+    // 🔔 Badge update
+    document.getElementById('pendingBadge').textContent = pending.length;
+  } catch (err) {
+    console.error('Error rendering pending approvals:', err);
+    document.getElementById('pendingApprovalsTable').innerHTML = 
+      '<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--danger);">Error loading pending approvals</td></tr>';
+    document.getElementById('pendingBadge').textContent = 0;
+  }
 }
 
     function renderBranches() {
-      const branches = currentTeam && dashboardData.teams[currentTeam] 
-        ? dashboardData.teams[currentTeam].branches 
-        : [];
+      let branches = [];
       
-      const html = branches.map(branch => 
-        `<button class="branch-btn ${currentBranch === branch ? 'active' : ''}" onclick="switchBranch('${branch}')">${branch}</button>`
-      ).join('');
-      
-      document.getElementById('branchSwitcher').innerHTML = html;
+      try {
+        if (currentTeam && dashboardData.teams && dashboardData.teams[currentTeam]) {
+          // Show team-specific branches
+          branches = dashboardData.teams[currentTeam].branches || [];
+        } else if (dashboardData.builds && dashboardData.releases) {
+          // Show all unique branches from builds and releases
+          const allBranches = [...new Set([
+            ...(dashboardData.builds || []).map(b => b.branch),
+            ...(dashboardData.releases || []).map(r => r.branch)
+          ].filter(b => b && b !== 'N/A'))];
+          branches = allBranches;
+        }
+        
+        // Update main branch filter dropdown
+        const options = ['<option value="">All Branches</option>'].concat(
+          branches.map(branch => `<option value="${branch}" ${currentBranch === branch ? 'selected' : ''}>${branch}</option>`)
+        );
+        const branchSelect = document.getElementById('branchSelect');
+        if (branchSelect) {
+          branchSelect.innerHTML = options.join('');
+        }
+        
+        // Update modal branch dropdowns
+        const modalOptions = ['<option value="">Select a branch</option>'].concat(
+          branches.map(branch => `<option value="${branch}">${branch}</option>`)
+        );
+        const buildBranch = document.getElementById('bulkBuildBranch');
+        const releaseBranch = document.getElementById('bulkReleaseBranch');
+        if (buildBranch) buildBranch.innerHTML = modalOptions.join('');
+        if (releaseBranch) releaseBranch.innerHTML = modalOptions.join('');
+      } catch (err) {
+        console.error('Error rendering branches:', err);
+      }
     }
     
     function renderTeams() {
       const teams = Object.keys(dashboardData.teams || {});
-      const options = ['<option value="">All Teams</option>'].concat(
+      console.log('Available teams for user:', teams);
+      
+      // Only show "All Teams" if user has multiple teams, otherwise select the only team
+      let options = [];
+      if (teams.length > 1) {
+        options.push('<option value="">All Teams</option>');
+      }
+      
+      options = options.concat(
         teams.map(team => `<option value="${team}" ${currentTeam === team ? 'selected' : ''}>${dashboardData.teams[team].name}</option>`)
       );
+      
       document.getElementById('teamSelect').innerHTML = options.join('');
+      
+      // If user only has one team, auto-select it
+      if (teams.length === 1 && !currentTeam) {
+        currentTeam = teams[0];
+        document.getElementById('teamSelect').value = currentTeam;
+        console.log('Auto-selected single team:', currentTeam);
+      }
       
       const teamApps = currentTeam && dashboardData.teams[currentTeam] 
         ? dashboardData.teams[currentTeam].apps 
@@ -1196,53 +1399,225 @@ function renderPendingApprovals() {
     }
     
     function renderAppCheckboxes(apps) {
+      // Get available branches
+      let branches = [];
+      if (currentTeam && dashboardData.teams && dashboardData.teams[currentTeam]) {
+        branches = dashboardData.teams[currentTeam].branches || [];
+      } else if (dashboardData.builds && dashboardData.releases) {
+        branches = [...new Set([
+          ...(dashboardData.builds || []).map(b => b.branch),
+          ...(dashboardData.releases || []).map(r => r.branch)
+        ].filter(b => b && b !== 'N/A'))];
+      }
+      
+      const branchOptions = branches.map(b => `<option value="${b}">${b}</option>`).join('');
+      
       const buildHtml = apps.map(app => 
-        `<div class="app-checkbox-item">
+        `<div class="app-checkbox-item" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
           <input type="checkbox" class="checkbox" value="${app}" id="build-${app}">
-          <label for="build-${app}">${app}</label>
+          <label for="build-${app}" style="flex: 1; margin: 0;">${app}</label>
+          <select class="form-input app-branch-select" data-app="${app}" style="width: 150px; padding: 0.3rem;">
+            <option value="">Use common branch</option>
+            ${branchOptions}
+          </select>
         </div>`
       ).join('');
       document.getElementById('bulkBuildAppsList').innerHTML = buildHtml;
       
       const releaseHtml = apps.map(app => 
-        `<div class="app-checkbox-item">
+        `<div class="app-checkbox-item" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
           <input type="checkbox" class="checkbox" value="${app}" id="release-${app}">
-          <label for="release-${app}">${app}</label>
+          <label for="release-${app}" style="flex: 1; margin: 0;">${app}</label>
+          <select class="form-input app-branch-select" data-app="${app}" style="width: 150px; padding: 0.3rem;">
+            <option value="">Use common branch</option>
+            ${branchOptions}
+          </select>
         </div>`
       ).join('');
       document.getElementById('bulkReleaseAppsList').innerHTML = releaseHtml;
       
       const scheduleOptions = apps.map(app => `<option value="${app}">${app}</option>`).join('');
       document.getElementById('scheduleApp').innerHTML = scheduleOptions;
+      
+      // Populate app filters for builds and releases views
+      const appOptions = apps.map(app => `<option value="${app}">${app}</option>`).join('');
+      const buildFilter = document.getElementById('buildAppFilter');
+      const releaseFilter = document.getElementById('releaseAppFilter');
+      if (buildFilter) buildFilter.innerHTML = '<option value="">All Apps</option>' + appOptions;
+      if (releaseFilter) releaseFilter.innerHTML = '<option value="">All Apps</option>' + appOptions;
+      
+      // Populate branch filters for builds and releases views
+      const buildBranchFilter = document.getElementById('buildBranchFilter');
+      const releaseBranchFilter = document.getElementById('releaseBranchFilter');
+      if (buildBranchFilter) buildBranchFilter.innerHTML = '<option value="">All Branches</option>' + branchOptions;
+      if (releaseBranchFilter) releaseBranchFilter.innerHTML = '<option value="">All Branches</option>' + branchOptions;
     }
     
-    function renderRecentActivity() {
-      const combined = [...dashboardData.builds, ...dashboardData.releases]
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 10);
-      
-      const html = combined.map(item => `
-        <tr>
-          <td><strong>${item.appName}</strong></td>
-          <td>${item.type}</td>
-          <td>${item.branch}</td>
-          <td>${getStatusBadge(item.conclusion || item.status)}</td>
-          <td>${item.duration}</td>
-          <td>${item.triggeredBy}</td>
-          <td>${new Date(item.createdAt).toLocaleString()}</td>
-          <td>
-            <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="viewLogs('${item.repo}', '${item.runId}')">
-              📋 Logs
-            </button>
-          </td>
-        </tr>
-      `).join('');
-      
-      document.getElementById('recentActivityTable').innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No recent activity</td></tr>';
+    function updateIndividualBranches(type) {
+      const commonBranch = document.getElementById(type === 'build' ? 'bulkBuildBranch' : 'bulkReleaseBranch').value;
+      if (commonBranch) {
+        const selects = document.querySelectorAll(`#bulk${type === 'build' ? 'Build' : 'Release'}AppsList .app-branch-select`);
+        selects.forEach(select => {
+          if (select.value === '') {
+            // Only update if user hasn't selected individual branch
+            select.value = commonBranch;
+          }
+        });
+      }
     }
     
-    function renderBuildsTable() {
-      const html = dashboardData.builds.map((build, idx) => `
+    // Filter functions for builds and releases tables
+    let filteredBuildsData = [];
+    let filteredReleasesData = [];
+    
+    function applyBuildFilters() {
+      const appFilter = document.getElementById('buildAppFilter')?.value || '';
+      const branchFilter = document.getElementById('buildBranchFilter')?.value || '';
+      const statusFilter = document.getElementById('buildStatusFilter')?.value || '';
+      
+      // Note: dashboardData.builds is already filtered by team from the backend
+      filteredBuildsData = dashboardData.builds.filter(build => {
+        const appMatch = !appFilter || build.appName === appFilter;
+        const branchMatch = !branchFilter || build.branch === branchFilter;
+        const statusMatch = !statusFilter || build.conclusion === statusFilter || build.status === statusFilter;
+        return appMatch && branchMatch && statusMatch;
+      });
+      
+      console.log(`Build filters applied - App: ${appFilter || 'All'}, Branch: ${branchFilter || 'All'}, Status: ${statusFilter || 'All'}, Results: ${filteredBuildsData.length}`);
+      renderBuildsTable(filteredBuildsData);
+    }
+    
+    function applyReleaseFilters() {
+      const appFilter = document.getElementById('releaseAppFilter')?.value || '';
+      const branchFilter = document.getElementById('releaseBranchFilter')?.value || '';
+      const statusFilter = document.getElementById('releaseStatusFilter')?.value || '';
+      
+      // Note: dashboardData.releases is already filtered by team from the backend
+      filteredReleasesData = dashboardData.releases.filter(release => {
+        const appMatch = !appFilter || release.appName === appFilter;
+        const branchMatch = !branchFilter || release.branch === branchFilter;
+        const statusMatch = !statusFilter || release.conclusion === statusFilter || release.status === statusFilter;
+        return appMatch && branchMatch && statusMatch;
+      });
+      
+      console.log(`Release filters applied - App: ${appFilter || 'All'}, Branch: ${branchFilter || 'All'}, Status: ${statusFilter || 'All'}, Results: ${filteredReleasesData.length}`);
+      renderReleasesTable(filteredReleasesData);
+    }
+    
+    // Helper function to render step statuses with clickable links
+    function renderStepStatuses(steps, jobUrl) {
+      if (!steps?.length) return '<div style="color:#9ca3af; font-size:0.8rem; padding:4px;">No steps available</div>';
+
+      return steps.map(step => {
+        let color = '#6b7280', symbol = '○', bg = '#f3f4f6';
+        if (step.status === 'in_progress') {
+          color = '#eab308'; symbol = '⟳'; bg = '#fef3c7';
+        } else if (step.conclusion === 'success') {
+          color = '#22c55e'; symbol = '✓'; bg = '#dcfce7';
+        } else if (step.conclusion === 'failure') {
+          color = '#ef4444'; symbol = '✗'; bg = '#fee2e2';
+        } else if (step.conclusion === 'skipped') {
+          color = '#9ca3af'; symbol = '⊘'; bg = '#f3f4f6';
+        }
+
+        const stepAnchor = `${jobUrl}#step:${step.number}:1`;
+        const isClickable = step.conclusion === 'failure' || step.status === 'in_progress';
+
+        return `
+          <div style="display:flex; align-items:center; padding:4px 8px; margin:3px 0; background:${bg}; border-radius:6px; font-size:0.8rem; border:1px solid #e5e7eb;">
+            <span style="color:${color}; font-weight:bold; margin-right:6px;">${symbol}</span>
+            ${isClickable ?
+              `<a href="${stepAnchor}" target="_blank" rel="noopener noreferrer" style="color:#000; text-decoration:none; flex:1; display:flex; align-items:center;" title="View logs for this step">
+                <span style="flex:1;">${step.number}. ${step.name}</span>
+                <span style="margin-left:8px; font-size:0.7rem; opacity:0.6;">🔗</span>
+              </a>` :
+              `<span style="color:#000;">${step.number}. ${step.name}</span>`
+            }
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Helper function to render job statuses with expandable step details
+    function renderJobStatuses(jobs) {
+      if (!jobs?.length) return '<div style="color:#9ca3af; padding:8px;">No jobs</div>';
+
+      return `
+        <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:4px;">
+          ${jobs.map((job, idx) => {
+            let color = '#6b7280', symbol = '○', bg = '#f3f4f6', borderColor = '#d1d5db';
+            if (job.status === 'in_progress' || job.status === 'queued') {
+              color = '#eab308'; symbol = '⟳'; bg = '#fef3c7'; borderColor = '#f59e0b';
+            } else if (job.conclusion === 'success') {
+              color = '#22c55e'; symbol = '✓'; bg = '#dcfce7'; borderColor = '#22c55e';
+            } else if (job.conclusion === 'failure' || job.conclusion === 'cancelled') {
+              color = '#ef4444'; symbol = '✗'; bg = '#fee2e2'; borderColor = '#ef4444';
+            }
+
+            const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            const stepCount = job.steps?.length || 0;
+            const hasFailedSteps = job.steps?.some(s => s.conclusion === 'failure');
+
+            return `
+              <div style="position:relative;">
+                <div onclick="toggleJobSteps('${jobId}')"
+                     title="${job.name} • ${job.duration || 'N/A'} • ${stepCount} steps • Click to expand"
+                     style="cursor:pointer; padding:5px 10px; background:${bg}; border-radius:6px; border:2px solid ${borderColor}; display:flex; align-items:center; gap:6px; font-size:0.82rem; white-space:nowrap; transition: all 0.2s;">
+                  <span style="color:${color}; font-weight:bold;">${symbol}</span>
+                  <span style="font-weight:500; color:#000;">${job.name}</span>
+                  ${stepCount ? `<small style="color:#6b7280;">(${stepCount})</small>` : ''}
+                  ${hasFailedSteps ? `<span style="color:#ef4444; font-size:0.7rem;">⚠</span>` : ''}
+                </div>
+                <div id="${jobId}" style="display:none; position:absolute; z-index:20; background:white; border:2px solid ${borderColor}; border-radius:8px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.25); min-width:380px; max-width:580px; margin-top:8px; padding:12px; max-height:420px; overflow-y:auto; left:0;">
+                  <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:10px;">
+                    <div style="flex:1;">
+                      <div style="font-weight:600; margin-bottom:4px; color:#1f2937; font-size:0.95rem;">${job.name}</div>
+                      <div style="font-size:0.82rem; color:#4b5563;">
+                        ${job.duration || 'N/A'} • ${job.status}${job.conclusion ? ` → ${job.conclusion}` : ''}
+                      </div>
+                    </div>
+                    <a href="${job.htmlUrl}" target="_blank" rel="noopener noreferrer"
+                       style="background:#3b82f6; color:white; padding:6px 12px; border-radius:6px; font-size:0.8rem; text-decoration:none; white-space:nowrap; margin-left:8px;"
+                       title="View full job logs on GitHub">
+                      View Logs →
+                    </a>
+                  </div>
+                  <div style="border-top:1px solid #e5e7eb; padding-top:10px;">
+                    ${renderStepStatuses(job.steps, job.htmlUrl)}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    // Toggle job steps visibility
+    function toggleJobSteps(jobId) {
+      // Close all other job popups
+      document.querySelectorAll('[id^="job-"]').forEach(el => {
+        if (el.id !== jobId) el.style.display = 'none';
+      });
+      // Toggle clicked job
+      const el = document.getElementById(jobId);
+      if (el) {
+        el.style.display = el.style.display === 'block' ? 'none' : 'block';
+      }
+    }
+
+    // Close job popups when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('[id^="job-"]') && !e.target.closest('[onclick^="toggleJobSteps"]')) {
+        document.querySelectorAll('[id^="job-"]').forEach(el => {
+          el.style.display = 'none';
+        });
+      }
+    });
+
+    function renderBuildsTable(builds = null) {
+      const dataToRender = builds || dashboardData.builds;
+      const html = dataToRender.map((build, idx) => `
         <tr>
           <td><input type="checkbox" class="checkbox build-checkbox" data-index="${idx}"></td>
           <td><strong>${build.appName}</strong></td>
@@ -1252,6 +1627,7 @@ function renderPendingApprovals() {
           <td>${build.duration}</td>
           <td><code>${build.commitSha}</code></td>
           <td>${new Date(build.createdAt).toLocaleString()}</td>
+          <td style="min-width:280px; max-width:500px;">${renderJobStatuses(build.jobs)}</td>
           <td>
             <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="viewLogs('${build.repo}', '${build.runId}')">
               📋 Logs
@@ -1272,8 +1648,9 @@ function renderPendingApprovals() {
       document.getElementById('buildsTable').innerHTML = html || '<tr><td colspan="9" style="text-align: center; padding: 2rem;">No builds found</td></tr>';
     }
     
-    function renderReleasesTable() {
-      const html = dashboardData.releases.map((release, idx) => `
+    function renderReleasesTable(releases = null) {
+      const dataToRender = releases || dashboardData.releases;
+      const html = dataToRender.map((release, idx) => `
         <tr>
           <td><input type="checkbox" class="checkbox release-checkbox" data-index="${idx}"></td>
           <td><strong>${release.appName}</strong></td>
@@ -1282,6 +1659,7 @@ function renderPendingApprovals() {
           <td>${getStatusBadge(release.conclusion || release.status)}</td>
           <td>${release.duration}</td>
           <td>${new Date(release.createdAt).toLocaleString()}</td>
+          <td style="min-width:280px; max-width:500px;">${renderJobStatuses(release.jobs)}</td>
           <td>
             <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="viewLogs('${release.repo}', '${release.runId}')">
               📋 Logs
@@ -1333,13 +1711,65 @@ function renderPendingApprovals() {
     }
     
     function switchTeam() {
-      currentTeam = document.getElementById('teamSelect').value;
-      currentBranch = '';
-      loadDashboard();
+      try {
+        console.log('switchTeam function called');
+        
+        const teamSelect = document.getElementById('teamSelect');
+        if (!teamSelect) {
+          console.error('teamSelect element not found!');
+          return;
+        }
+        
+        currentTeam = teamSelect.value;
+        console.log(`Team selected: "${currentTeam}"`);
+        
+        currentBranch = ''; // Reset branch when changing team
+        const branchSelect = document.getElementById('branchSelect');
+        if (branchSelect) branchSelect.value = ''; // Reset dropdown
+        
+        // Reset all filters when team changes
+        const buildAppFilter = document.getElementById('buildAppFilter');
+        const buildBranchFilter = document.getElementById('buildBranchFilter');
+        const buildStatusFilter = document.getElementById('buildStatusFilter');
+        const releaseAppFilter = document.getElementById('releaseAppFilter');
+        const releaseBranchFilter = document.getElementById('releaseBranchFilter');
+        const releaseStatusFilter = document.getElementById('releaseStatusFilter');
+        
+        if (buildAppFilter) buildAppFilter.value = '';
+        if (buildBranchFilter) buildBranchFilter.value = '';
+        if (buildStatusFilter) buildStatusFilter.value = '';
+        if (releaseAppFilter) releaseAppFilter.value = '';
+        if (releaseBranchFilter) releaseBranchFilter.value = '';
+        if (releaseStatusFilter) releaseStatusFilter.value = '';
+        
+        // Reset filtered data arrays
+        filteredBuildsData = [];
+        filteredReleasesData = [];
+        
+        // Clear current table data immediately
+        const buildsTable = document.getElementById('buildsTable');
+        const releasesTable = document.getElementById('releasesTable');
+        if (buildsTable) {
+          buildsTable.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem; color: #6b7280;">Loading team data...</td></tr>';
+          console.log('Builds table cleared');
+        }
+        if (releasesTable) {
+          releasesTable.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #6b7280;">Loading team data...</td></tr>';
+          console.log('Releases table cleared');
+        }
+        
+        console.log(`Calling loadDashboard with team: ${currentTeam || 'All'}`);
+        
+        // Load dashboard data which will trigger re-rendering of tables
+        loadDashboard();
+      } catch (error) {
+        console.error('Error in switchTeam:', error);
+        showToast('Failed to switch team: ' + error.message, 'error');
+      }
     }
     
-    function switchBranch(branch) {
-      currentBranch = currentBranch === branch ? '' : branch;
+    function switchBranch() {
+      currentBranch = document.getElementById('branchSelect').value;
       loadDashboard();
     }
     
@@ -1352,7 +1782,6 @@ function renderPendingApprovals() {
       document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
       event.currentTarget.classList.add('active');
       
-      document.getElementById('overviewView').style.display = view === 'overview' ? 'block' : 'none';
       document.getElementById('buildsView').style.display = view === 'builds' ? 'block' : 'none';
       document.getElementById('releasesView').style.display = view === 'releases' ? 'block' : 'none';
       document.getElementById('scheduledView').style.display = view === 'scheduled' ? 'block' : 'none';
@@ -1364,6 +1793,10 @@ function renderPendingApprovals() {
     }
     
     function openModal(modalId) {
+      // Ensure branches are populated in modals
+      if (modalId === 'bulkBuildModal' || modalId === 'bulkReleaseModal') {
+        renderBranches();
+      }
       document.getElementById(modalId).classList.add('active');
     }
     
@@ -1392,70 +1825,157 @@ function renderPendingApprovals() {
     }
     
     async function executeBulkBuilds() {
-      const selectedApps = Array.from(document.querySelectorAll('#bulkBuildAppsList input:checked'))
-        .map(cb => cb.value);
+      const selectedCheckboxes = document.querySelectorAll('#bulkBuildAppsList input:checked');
+      const commonBranch = document.getElementById('bulkBuildBranch').value;
       
-      if (selectedApps.length === 0) {
+      if (selectedCheckboxes.length === 0) {
         showToast('Please select at least one app', 'error');
         return;
       }
       
-      try {
-        const response = await fetch('/api/trigger/bulk-builds', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User': 'user1'
-          },
-          body: JSON.stringify({
-            apps: selectedApps,
-            branch: currentBranch || 'main',
-            team: currentTeam
-          })
-        });
+      if (!currentTeam) {
+        showToast('Please select a team first', 'error');
+        return;
+      }
+      
+      // Build app-branch mapping
+      const appBranches = [];
+      let hasError = false;
+      
+      selectedCheckboxes.forEach(cb => {
+        const app = cb.value;
+        const branchSelect = document.querySelector(`#bulkBuildAppsList .app-branch-select[data-app="${app}"]`);
+        const individualBranch = branchSelect?.value || '';
+        const branch = individualBranch || commonBranch;
         
-        const data = await response.json();
+        if (!branch) {
+          showToast(`Please select a branch for ${app} or set a common branch`, 'error');
+          hasError = true;
+          return;
+        }
+        
+        appBranches.push({ app, branch });
+      });
+      
+      if (hasError) return;
+      
+      try {
+        // Trigger each app with its specific branch
+        const results = [];
+        for (const { app, branch } of appBranches) {
+          const response = await fetch('/api/trigger/bulk-builds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              apps: [app],
+              branch: branch,
+              team: currentTeam
+            })
+          });
+          
+          if (response.ok) {
+            results.push({ app, branch, success: true });
+          } else {
+            const error = await response.json();
+            results.push({ app, branch, success: false, error: error.error });
+          }
+        }
+        
         closeModal('bulkBuildModal');
-        showToast(`Triggered builds for ${selectedApps.length} apps`, 'success');
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.length - successCount;
+        
+        if (failCount === 0) {
+          showToast(`✅ Triggered builds for ${successCount} apps`, 'success');
+        } else {
+          showToast(`⚠️ ${successCount} succeeded, ${failCount} failed`, 'warning');
+        }
+        
         setTimeout(loadDashboard, 2000);
       } catch (err) {
-        showToast('Failed to trigger builds', 'error');
+        console.error('Bulk build error:', err);
+        showToast(err.message || 'Failed to trigger builds', 'error');
       }
     }
     
     async function executeBulkReleases() {
-      const selectedApps = Array.from(document.querySelectorAll('#bulkReleaseAppsList input:checked'))
-        .map(cb => cb.value);
+      const selectedCheckboxes = document.querySelectorAll('#bulkReleaseAppsList input:checked');
+      const commonBranch = document.getElementById('bulkReleaseBranch').value;
       const version = document.getElementById('releaseVersion').value || 'latest';
       
-      if (selectedApps.length === 0) {
+      if (selectedCheckboxes.length === 0) {
         showToast('Please select at least one app', 'error');
         return;
       }
       
-      try {
-        const response = await fetch('/api/trigger/bulk-releases', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User': 'user1'
-          },
-          body: JSON.stringify({
-            apps: selectedApps,
-            branch: currentBranch || 'main',
-            team: currentTeam,
-            version
-          })
-        });
+      if (!currentTeam) {
+        showToast('Please select a team first', 'error');
+        return;
+      }
+      
+      // Build app-branch mapping
+      const appBranches = [];
+      let hasError = false;
+      
+      selectedCheckboxes.forEach(cb => {
+        const app = cb.value;
+        const branchSelect = document.querySelector(`#bulkReleaseAppsList .app-branch-select[data-app="${app}"]`);
+        const individualBranch = branchSelect?.value || '';
+        const branch = individualBranch || commonBranch;
         
-        const data = await response.json();
+        if (!branch) {
+          showToast(`Please select a branch for ${app} or set a common branch`, 'error');
+          hasError = true;
+          return;
+        }
+        
+        appBranches.push({ app, branch });
+      });
+      
+      if (hasError) return;
+      
+      try {
+        // Trigger each app with its specific branch
+        const results = [];
+        for (const { app, branch } of appBranches) {
+          const response = await fetch('/api/trigger/bulk-releases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              apps: [app],
+              branch: branch,
+              team: currentTeam,
+              version
+            })
+          });
+          
+          if (response.ok) {
+            results.push({ app, branch, success: true });
+          } else {
+            const error = await response.json();
+            results.push({ app, branch, success: false, error: error.error });
+          }
+        }
+        
         closeModal('bulkReleaseModal');
-        showToast(`Triggered releases for ${selectedApps.length} apps`, 'success');
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.length - successCount;
+        
+        if (failCount === 0) {
+          showToast(`✅ Triggered releases for ${successCount} apps`, 'success');
+        } else {
+          showToast(`⚠️ ${successCount} succeeded, ${failCount} failed`, 'warning');
+        }
+        
         setTimeout(loadDashboard, 2000);
       } catch (err) {
-        showToast('Failed to trigger releases', 'error');
+        console.error('Bulk release error:', err);
+        showToast(err.message || 'Failed to trigger releases', 'error');
       }
     }
+
     
     async function triggerSelectedBuilds() {
       const selected = Array.from(document.querySelectorAll('.build-checkbox:checked'))
@@ -1669,5 +2189,3 @@ function renderPendingApprovals() {
   </script>
 </body>
 </html>
-
-
